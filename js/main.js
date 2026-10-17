@@ -1,19 +1,43 @@
-// 入口：タブ切り替え、設定フォーム、記録一覧、モードの登録
+// 入口：タブとモードの切り替え、設定フォーム、記録一覧、テスト音、アプリの更新
 
 import { createMimicMode, MODE_ID as MIMIC } from './modes/mimic.js';
+import { createRelativeMode, MODE_ID as RELATIVE } from './modes/relative.js';
+import { createAbsoluteMode, MODE_ID as ABSOLUTE } from './modes/absolute.js';
 import { getSettings, updateSettings, resetSettings, LIMITS } from './settings.js';
 import { getDailyRecords, getDay, clearRecords } from './storage.js';
-import { midiToName } from './note-utils.js';
+import { midiToName, INTERVAL_NAMES } from './note-utils.js';
 import { preparePlayback, getSessionType } from './audio-engine.js';
 import { TonePlayer } from './tone-player.js';
 import { APP_VERSION, fetchLatestVersion, isNewer, refreshAndReload } from './updater.js';
 
-// モードを追加したらここに名前を足す
-const MODE_LABELS = { [MIMIC]: '声まね' };
+// ---------- モード ----------
+// モードを追加したら、ここと index.html の .mode-switch に足す
 
-const mimic = createMimicMode(document.getElementById('mode-mimic'), { onRecorded: renderToday });
-const activeMode = mimic;
+const MODE_LABELS = { [MIMIC]: '発声', [RELATIVE]: '相対音感', [ABSOLUTE]: '絶対音感' };
+
+const hooks = { onRecorded: renderToday };
+const modes = {
+  [MIMIC]: createMimicMode(document.getElementById('mode-mimic'), hooks),
+  [RELATIVE]: createRelativeMode(document.getElementById('mode-relative'), hooks),
+  [ABSOLUTE]: createAbsoluteMode(document.getElementById('mode-absolute'), hooks),
+};
+let activeMode = modes[getSettings().mode];
 let currentTab = 'practice';
+
+function showMode(id) {
+  if (activeMode.id !== id) activeMode.deactivate();
+  activeMode = modes[id];
+  for (const m of Object.values(modes)) document.getElementById(`mode-${m.id}`).hidden = m.id !== id;
+  document.querySelectorAll('.mode-switch button').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.mode === id));
+  });
+  updateSettings({ mode: id });
+  if (currentTab === 'practice') activeMode.activate();
+}
+
+document.querySelectorAll('.mode-switch button').forEach((b) => {
+  b.addEventListener('click', () => showMode(b.dataset.mode));
+});
 
 // ---------- タブ ----------
 
@@ -41,8 +65,8 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- 記録 ----------
 
-function sum(modes) {
-  return Object.values(modes).reduce(
+function sum(modesOfDay) {
+  return Object.values(modesOfDay).reduce(
     (acc, r) => ({ attempts: acc.attempts + r.attempts, correct: acc.correct + r.correct }),
     { attempts: 0, correct: 0 },
   );
@@ -72,8 +96,11 @@ function renderRecords() {
     list.innerHTML = '<p class="empty">まだ記録がありません。練習すると日ごとに記録されます。</p>';
     return;
   }
-  const rows = days.flatMap(({ date, modes }) =>
-    Object.entries(modes).map(([mode, r], i) => `
+  const order = Object.keys(MODE_LABELS);
+  const rows = days.flatMap(({ date, modes: byMode }) =>
+    Object.entries(byMode)
+      .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
+      .map(([mode, r], i) => `
       <tr>
         <th scope="row">${i === 0 ? formatDate(date) : ''}</th>
         <td>${MODE_LABELS[mode] ?? mode}</td>
@@ -85,7 +112,7 @@ function renderRecords() {
       </tr>`));
   list.innerHTML = `
     <table>
-      <thead><tr><th>日付</th><th>モード</th><th class="num">正解/挑戦</th><th>正解率</th></tr></thead>
+      <thead><tr><th>日付</th><th>練習</th><th class="num">正解/挑戦</th><th>正解率</th></tr></thead>
       <tbody>${rows.join('')}</tbody>
     </table>`;
 }
@@ -101,40 +128,42 @@ document.getElementById('btn-clear-records').addEventListener('click', () => {
 
 const form = document.getElementById('settings-form');
 
-function fillNoteSelect(select) {
+form.querySelectorAll('select[data-note-select]').forEach((select) => {
   const [lo, hi] = LIMITS.range;
   for (let m = lo; m <= hi; m++) select.add(new Option(midiToName(m), String(m)));
+});
+
+const chips = document.getElementById('interval-chips');
+for (let n = 1; n <= 12; n++) {
+  chips.insertAdjacentHTML('beforeend',
+    `<label class="chip"><input type="checkbox" name="relIntervals" value="${n}"><span>${INTERVAL_NAMES[n]}</span></label>`);
 }
-fillNoteSelect(form.rangeLow);
-fillNoteSelect(form.rangeHigh);
 
 const FORMATS = {
   toleranceCents: (v) => `±${v} セント`,
-  holdMs: (v) => `${(v / 1000).toFixed(1)} 秒`,
+  recordMs: (v) => `${(v / 1000).toFixed(1)} 秒`,
+  passRatio: (v) => `${v}% 以上`,
   timeLimitSec: (v) => `${v} 秒`,
 };
+const VALUE_FIELDS = ['rangeLow', 'rangeHigh', 'toleranceCents', 'recordMs', 'passRatio', 'timeLimitSec',
+  'relDirection', 'absNoteSet', 'absRangeLow', 'absRangeHigh'];
 
 function reflectSettings(s) {
-  form.rangeLow.value = String(s.rangeLow);
-  form.rangeHigh.value = String(s.rangeHigh);
-  form.toleranceCents.value = String(s.toleranceCents);
-  form.holdMs.value = String(s.holdMs);
-  form.timeLimitSec.value = String(s.timeLimitSec);
-  form.allowOctave.checked = s.allowOctave;
+  for (const name of VALUE_FIELDS) form.elements[name].value = String(s[name]);
+  form.elements.allowOctave.checked = s.allowOctave;
+  form.querySelectorAll('input[name="relIntervals"]').forEach((i) => {
+    i.checked = s.relIntervals.includes(Number(i.value));
+  });
   for (const [key, fmt] of Object.entries(FORMATS)) {
     form.querySelector(`output[data-for="${key}"]`).textContent = fmt(s[key]);
   }
 }
 
 function onFormChange() {
-  reflectSettings(updateSettings({
-    rangeLow: form.rangeLow.value,
-    rangeHigh: form.rangeHigh.value,
-    toleranceCents: form.toleranceCents.value,
-    holdMs: form.holdMs.value,
-    timeLimitSec: form.timeLimitSec.value,
-    allowOctave: form.allowOctave.checked,
-  }));
+  const patch = { allowOctave: form.elements.allowOctave.checked };
+  for (const name of VALUE_FIELDS) patch[name] = form.elements[name].value;
+  patch.relIntervals = [...form.querySelectorAll('input[name="relIntervals"]:checked')].map((i) => Number(i.value));
+  reflectSettings(updateSettings(patch));
 }
 
 form.addEventListener('input', onFormChange);
@@ -218,6 +247,9 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) checkForUpdate();
 });
 
+// ---------- 起動 ----------
+
 reflectSettings(getSettings());
 renderToday();
+showMode(activeMode.id);
 checkForUpdate();

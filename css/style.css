@@ -14,6 +14,8 @@
   --high: #d9480f;
   --low: #1c7ed6;
   --ng: #c92a2a;
+  --key-white: #fdfdfb;
+  --base-key: #dbe5ff;
   --radius: 16px;
   --tabbar-h: 58px;
   color-scheme: light;
@@ -33,6 +35,8 @@
     --high: #ff8a4c;
     --low: #5aaeff;
     --ng: #ff6b6b;
+    --key-white: #e4e6eb;
+    --base-key: #b9c9f5;
     color-scheme: dark;
   }
 }
@@ -126,12 +130,39 @@ button, select, input { font: inherit; color: inherit; }
 
 /* ---------- 練習画面 ---------- */
 
+/* 練習の種類の切り替え */
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.mode-switch button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+.mode-switch button[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
 .mode {
   display: flex;
   flex-direction: column;
   flex: 1;
   gap: 10px;
 }
+.mode[hidden] { display: none; }
 
 .target {
   margin: 0;
@@ -156,7 +187,7 @@ button, select, input { font: inherit; color: inherit; }
 
 .pitch {
   position: relative;
-  width: min(62vw, 240px);
+  width: min(46vw, 180px);
   aspect-ratio: 1;
   margin: 4px auto 0;
 }
@@ -177,7 +208,7 @@ button, select, input { font: inherit; color: inherit; }
   align-items: center;
   justify-content: center;
 }
-.note { font-size: clamp(2.8rem, 15vw, 4rem); font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.note { font-size: clamp(2.4rem, 12vw, 3.2rem); font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .cents { font-size: 1.05rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .badge {
@@ -281,6 +312,16 @@ button, select, input { font: inherit; color: inherit; }
   transform: scaleX(0);
 }
 
+/* 記録した音程の変化 */
+.trace {
+  display: block;
+  width: 100%;
+  height: 56px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
 .status {
   margin: 0;
   min-height: 3em;
@@ -293,9 +334,105 @@ button, select, input { font: inherit; color: inherit; }
 .actions {
   margin-top: auto;
   display: grid;
-  gap: 12px;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 10px;
   padding-top: 8px;
 }
+.actions .btn { min-height: 64px; }
+
+/* ---------- 鍵盤クイズ（相対音感・絶対音感） ---------- */
+
+.quiz-prompt {
+  margin: 4px 0 0;
+  min-height: 2.6em;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.quiz-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 96px;
+  text-align: center;
+}
+.quiz-badge { font-size: 2rem; font-weight: 800; line-height: 1.2; }
+.quiz.is-correct .quiz-badge { color: var(--ok); }
+.quiz.is-wrong .quiz-badge { color: var(--ng); }
+.quiz-reveal { margin: 0; font-size: 1.05rem; font-weight: 600; }
+.quiz .status { min-height: 2.6em; }
+
+.keyboard {
+  position: relative;
+  height: 180px;
+  margin-top: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.kb-whites { display: flex; gap: 3px; height: 100%; }
+.kb-key {
+  position: relative;
+  border: 0;
+  padding: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.12s, filter 0.08s;
+}
+.kb-key:active:not(:disabled) { filter: brightness(0.88); }
+.kb-key:disabled { opacity: 0.35; }
+.kb-white {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  padding-bottom: 10px;
+  border-radius: 0 0 10px 10px;
+  background: var(--key-white);
+  color: #1d1f24;
+  box-shadow: 0 0 0 1px var(--line), inset 0 -5px 0 rgba(0, 0, 0, 0.07);
+}
+.kb-white .kb-do { font-size: 1rem; font-weight: 800; }
+.kb-white .kb-en { font-size: 0.75rem; color: #6b6e76; }
+.kb-black {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 10%;
+  height: 58%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+  border-radius: 0 0 8px 8px;
+  background: #2b2d33;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.kb-key.is-base { background: var(--base-key); }
+.kb-black.is-base { background: #3d5fbf; }
+.kb-key.is-base::before {
+  content: "基準";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.kb-key.is-correct { background: var(--ok); color: #fff; }
+.kb-key.is-wrong { background: var(--ng); color: #fff; }
+.kb-key.is-correct .kb-en, .kb-key.is-wrong .kb-en { color: rgba(255, 255, 255, 0.85); }
 
 /* ---------- 記録 ---------- */
 
@@ -341,6 +478,55 @@ button, select, input { font: inherit; color: inherit; }
   background: var(--surface);
 }
 .card legend { padding: 0 6px; font-weight: 700; }
+
+.settings-head {
+  margin: 10px 0 -4px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+.row-gap { margin-top: 14px; }
+
+/* 選択式（ラジオボタン） */
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.segmented label { position: relative; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span {
+  display: block;
+  padding: 11px 0;
+  border-radius: 9px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--muted);
+}
+.segmented input:checked + span {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.segmented input:focus-visible + span { outline: 2px solid var(--accent); }
+
+/* 複数選択（チップ） */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip span {
+  display: inline-block;
+  padding: 9px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 

@@ -22,6 +22,11 @@ const ASSETS = [
   'js/settings.js',
   'js/storage.js',
   'js/modes/mimic.js',
+  'js/modes/keyboard-quiz.js',
+  'js/modes/relative.js',
+  'js/modes/absolute.js',
+  'js/keyboard.js',
+  'js/trace.js',
 ];
 
 export { APP_VERSION };

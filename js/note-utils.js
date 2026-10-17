@@ -2,6 +2,24 @@
 
 export const A4_FREQ = 440;
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+/** 固定ドの音名 */
+export const DO_NAMES = ['ド', 'ド#', 'レ', 'レ#', 'ミ', 'ファ', 'ファ#', 'ソ', 'ソ#', 'ラ', 'ラ#', 'シ'];
+export const WHITE_PCS = new Set([0, 2, 4, 5, 7, 9, 11]);
+/** 半音数 → 音程名 */
+export const INTERVAL_NAMES = [
+  '完全1度', '短2度', '長2度', '短3度', '長3度', '完全4度', '増4度',
+  '完全5度', '短6度', '長6度', '短7度', '長7度', 'オクターブ',
+];
+
+/** MIDI 番号 → ピッチクラス（0 = C 〜 11 = B） */
+export function pitchClass(midi) {
+  return ((Math.round(midi) % 12) + 12) % 12;
+}
+
+/** MIDI 番号 → 「ソ（G4）」のような表示 */
+export function noteLabel(midi) {
+  return `${DO_NAMES[pitchClass(midi)]}（${midiToName(midi)}）`;
+}
 
 /** 周波数 → MIDI 番号（小数を含む。A4 = 69） */
 export function freqToMidi(freq) {

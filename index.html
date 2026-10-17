@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#15171c" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="音感">
-  <meta name="description" content="お手本の音を声でまねて、音程が合っているかを判定する音感トレーニング">
+  <meta name="description" content="発声・相対音感・絶対音感を練習できる音感トレーニング">
   <title>音感トレーニング</title>
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
@@ -30,7 +30,14 @@
   <main class="app-main">
     <!-- 練習 -->
     <section class="view is-active" data-view="practice" aria-label="練習">
-      <div class="mode" id="mode-mimic" data-state="init">
+      <div class="mode-switch" role="tablist" aria-label="練習の種類">
+        <button type="button" role="tab" data-mode="mimic">発声</button>
+        <button type="button" role="tab" data-mode="relative">相対音感</button>
+        <button type="button" role="tab" data-mode="absolute">絶対音感</button>
+      </div>
+
+      <!-- 発声練習 -->
+      <div class="mode" id="mode-mimic" data-state="init" hidden>
         <p class="target">お手本 <strong data-el="target">—</strong></p>
         <p class="rule" data-el="rule"></p>
 
@@ -56,6 +63,7 @@
         </div>
 
         <p class="direction" data-el="direction">&nbsp;</p>
+        <canvas class="trace" data-el="trace" aria-label="記録した音程の変化"></canvas>
         <div class="timebar" aria-hidden="true"><div class="timebar-fill" data-el="time"></div></div>
         <p class="status" data-el="status" role="status" aria-live="polite">「はじめる」をタップすると、マイクの使用許可を求めます。</p>
 
@@ -64,6 +72,10 @@
           <button type="button" class="btn btn-primary" data-action="main">はじめる</button>
         </div>
       </div>
+
+      <!-- 相対音感・絶対音感（中身は js/modes/keyboard-quiz.js が作る） -->
+      <div class="mode quiz" id="mode-relative" hidden></div>
+      <div class="mode quiz" id="mode-absolute" hidden></div>
     </section>
 
     <!-- 記録 -->
@@ -77,31 +89,36 @@
     <section class="view" data-view="settings" aria-label="設定">
       <h2>設定</h2>
       <form class="settings" id="settings-form" onsubmit="return false">
+        <h3 class="settings-head">発声練習</h3>
         <fieldset class="card">
           <legend>出題範囲</legend>
           <div class="row-2">
             <label class="field">
               <span class="field-head">いちばん低い音</span>
-              <select name="rangeLow"></select>
+              <select name="rangeLow" data-note-select></select>
             </label>
             <label class="field">
               <span class="field-head">いちばん高い音</span>
-              <select name="rangeHigh"></select>
+              <select name="rangeHigh" data-note-select></select>
             </label>
           </div>
         </fieldset>
 
         <div class="card">
           <label class="field">
-            <span class="field-head">判定の許容幅 <output data-for="toleranceCents"></output></span>
+            <span class="field-head">合っているとみなす幅 <output data-for="toleranceCents"></output></span>
             <input type="range" name="toleranceCents" min="10" max="50" step="5">
           </label>
           <label class="field">
-            <span class="field-head">正解に必要な保持時間 <output data-for="holdMs"></output></span>
-            <input type="range" name="holdMs" min="300" max="1500" step="100">
+            <span class="field-head">記録する時間 <output data-for="recordMs"></output></span>
+            <input type="range" name="recordMs" min="1000" max="5000" step="500">
           </label>
           <label class="field">
-            <span class="field-head">1問の制限時間 <output data-for="timeLimitSec"></output></span>
+            <span class="field-head">正解に必要な割合 <output data-for="passRatio"></output></span>
+            <input type="range" name="passRatio" min="50" max="100" step="5">
+          </label>
+          <label class="field">
+            <span class="field-head">声を出すまでの制限時間 <output data-for="timeLimitSec"></output></span>
             <input type="range" name="timeLimitSec" min="5" max="30" step="1">
           </label>
           <label class="toggle">
@@ -109,6 +126,39 @@
             <span>オクターブ違いも正解にする<small>例：お手本が E4 のとき、E3 や E5 で歌っても正解</small></span>
           </label>
         </div>
+
+        <h3 class="settings-head">相対音感</h3>
+        <fieldset class="card">
+          <legend>出題する音程</legend>
+          <div class="chips" id="interval-chips"></div>
+        </fieldset>
+        <fieldset class="card">
+          <legend>2つ目の音の向き</legend>
+          <div class="segmented">
+            <label><input type="radio" name="relDirection" value="up"><span>上行</span></label>
+            <label><input type="radio" name="relDirection" value="down"><span>下行</span></label>
+            <label><input type="radio" name="relDirection" value="both"><span>両方</span></label>
+          </div>
+        </fieldset>
+
+        <h3 class="settings-head">絶対音感</h3>
+        <fieldset class="card">
+          <legend>使う音</legend>
+          <div class="segmented">
+            <label><input type="radio" name="absNoteSet" value="white"><span>白鍵のみ</span></label>
+            <label><input type="radio" name="absNoteSet" value="all"><span>12音すべて</span></label>
+          </div>
+          <div class="row-2 row-gap">
+            <label class="field">
+              <span class="field-head">いちばん低い音</span>
+              <select name="absRangeLow" data-note-select></select>
+            </label>
+            <label class="field">
+              <span class="field-head">いちばん高い音</span>
+              <select name="absRangeHigh" data-note-select></select>
+            </label>
+          </div>
+        </fieldset>
 
         <button type="button" class="btn btn-secondary" id="btn-reset-settings">初期値に戻す</button>
       </form>
@@ -127,7 +177,7 @@
       </div>
 
       <div class="card tips">
-        <h3>うまく判定されないとき</h3>
+        <h3>発声練習でうまく判定されないとき</h3>
         <ul>
           <li>イヤホンを使うと、お手本の音を聞き取りやすくなります。</li>
           <li>「アー」など母音をのばすと安定して判定されます。</li>

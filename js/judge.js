@@ -1,41 +1,51 @@
-// 「許容幅の中を一定時間保てたか」の判定
+// 発声練習の判定：声を出し始めてから一定時間を記録し、合っていた割合で正誤を決める
 
 /**
  * @param {object} opts
- * @param {number} opts.toleranceCents 許容幅（±セント）
- * @param {number} opts.holdMs 保てば正解になる時間
- * @param {number} [opts.gapMs] 推定が一瞬途切れた（null）ときに許す時間
+ * @param {number} opts.toleranceCents 合っているとみなす幅（±セント）
+ * @param {number} opts.durationMs 記録する時間
+ * @param {number} opts.passRatio 正解に必要な割合（%）
  */
-export function createHoldJudge({ toleranceCents, holdMs, gapMs = 150 }) {
-  let holdStart = null;
-  let lastInRange = null;
+export function createRatioJudge({ toleranceCents, durationMs, passRatio }) {
+  let start = null;
+  let total = 0;
+  let matched = 0;
 
   return {
     reset() {
-      holdStart = null;
-      lastInRange = null;
+      start = null;
+      total = 0;
+      matched = 0;
     },
 
     /**
-     * @param {number|null} cents お手本からのずれ。推定できなければ null
+     * 推定のたびに呼ぶ（一定間隔で呼ばれる前提で、回数の割合を時間の割合とみなす）。
+     * 最初に声が検出された時点から記録を始める。
+     * @param {number|null} cents お手本からのずれ。声が出ていなければ null
      * @param {number} now performance.now() 基準の時刻
-     * @returns {{inRange: boolean, progress: number, done: boolean}}
      */
     update(cents, now) {
-      const inRange = cents !== null && Math.abs(cents) <= toleranceCents;
-      if (inRange) {
-        if (holdStart === null) holdStart = now;
-        lastInRange = now;
-      } else if (cents === null && holdStart !== null && now - lastInRange < gapMs) {
-        // 息継ぎ程度の途切れは保持を続ける
-      } else {
-        holdStart = null;
+      if (start === null) {
+        if (cents === null) return { recording: false, done: false };
+        start = now;
       }
-      const held = holdStart === null ? 0 : now - holdStart;
+      const elapsed = now - start;
+      const inRange = cents !== null && Math.abs(cents) <= toleranceCents;
+      if (elapsed < durationMs) {
+        // 記録中の途切れ（null）は「合っていない」として数える
+        total += 1;
+        if (inRange) matched += 1;
+      }
+      const ratio = total ? matched / total : 0;
+      const done = elapsed >= durationMs;
       return {
+        recording: true,
         inRange,
-        progress: Math.min(1, held / holdMs),
-        done: inRange && held >= holdMs,
+        elapsed: Math.min(elapsed, durationMs),
+        progress: Math.min(1, elapsed / durationMs),
+        ratio,
+        done,
+        passed: done && ratio * 100 >= passRatio,
       };
     },
   };
