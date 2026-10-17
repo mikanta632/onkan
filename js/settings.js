@@ -3,10 +3,13 @@
 const KEY = 'onkan.settings.v2';
 const OLD_KEY = 'onkan.settings.v1'; // v1 ではオクターブ違いの初期値がオフだった
 
-export const MODES = ['mimic', 'relative', 'absolute'];
+export const MODES = ['voice', 'relative', 'absolute'];
+export const VOICE_TYPES = ['single', 'interval', 'phrase'];
+export const PHRASE_NOTE_MS = [1200, 900, 600]; // ゆっくり / ふつう / はやい
 
 export const DEFAULT_SETTINGS = {
-  mode: 'mimic',        // 最後に選んだ練習
+  mode: 'voice',        // 最後に選んだ練習
+  voiceType: 'single',  // 発声練習の種類：1音 / 音程 / フレーズ
 
   // 発声練習
   rangeLow: 60,         // 出題範囲の下限（MIDI 番号。60 = C4）
@@ -16,6 +19,9 @@ export const DEFAULT_SETTINGS = {
   passRatio: 70,        // 記録中に合っていた時間の割合がこれ以上なら正解（%）
   timeLimitSec: 10,     // 声を出し始めるまでの制限時間
   allowOctave: true,    // オクターブ違いも正解にする（低い声・高い声どちらでも練習できるように）
+  phraseLength: 3,      // フレーズの音の数
+  phraseStep: 'step',   // 跳び方：step 隣の音まで / third 3度まで / fifth 5度まで
+  phraseNoteMs: 900,    // フレーズの 1 音の長さ
 
   // 相対音感
   relIntervals: [2, 4, 5, 7, 12], // 出題する音程（半音数）
@@ -59,7 +65,11 @@ function normalize(s) {
     ? [...new Set(s.relIntervals.map(Number))].filter((n) => Number.isInteger(n) && n >= 1 && n <= 12).sort((a, b) => a - b)
     : [];
   return {
-    mode: oneOf(s.mode, MODES, d.mode),
+    mode: oneOf(s.mode === 'mimic' ? 'voice' : s.mode, MODES, d.mode), // v1.4 までは発声練習の id が mimic
+    voiceType: oneOf(s.voiceType, VOICE_TYPES, d.voiceType),
+    phraseLength: clamp(s.phraseLength, [2, 4], d.phraseLength),
+    phraseStep: oneOf(s.phraseStep, ['step', 'third', 'fifth'], d.phraseStep),
+    phraseNoteMs: oneOf(Number(s.phraseNoteMs), PHRASE_NOTE_MS, d.phraseNoteMs),
     rangeLow,
     rangeHigh,
     toleranceCents: clamp(s.toleranceCents, LIMITS.toleranceCents, d.toleranceCents),

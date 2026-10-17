@@ -27,6 +27,10 @@ const ASSETS = [
   'js/modes/absolute.js',
   'js/keyboard.js',
   'js/trace.js',
+  'js/roll.js',
+  'js/voice-session.js',
+  'js/modes/voice.js',
+  'js/modes/phrase.js',
 ];
 
 export { APP_VERSION };

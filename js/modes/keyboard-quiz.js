@@ -35,7 +35,8 @@ export function createKeyboardQuiz(root, { id, intro, makeQuestion, onRecorded }
     <p class="status" data-el="status" role="status" aria-live="polite"></p>
     <div data-el="keyboard"></div>
     <div class="actions">
-      <button type="button" class="btn btn-secondary" data-action="replay" disabled>もう一度聞く</button>
+      <button type="button" class="btn btn-end" data-action="end" disabled>終了</button>
+      <button type="button" class="btn btn-secondary" data-action="replay" disabled>もう一度</button>
       <button type="button" class="btn btn-primary" data-action="main">はじめる</button>
     </div>`;
   const $ = (name) => root.querySelector(`[data-el="${name}"]`);
@@ -46,9 +47,10 @@ export function createKeyboardQuiz(root, { id, intro, makeQuestion, onRecorded }
     status: $('status'),
     main: root.querySelector('[data-action="main"]'),
     replay: root.querySelector('[data-action="replay"]'),
+    end: root.querySelector('[data-action="end"]'),
   };
 
-  // init: 音声未準備 / ready: 出題待ち / answering: 解答中 / result: 判定済み
+  // init: 未開始 / answering: 解答中 / result: 判定済み
   let state = 'init';
   let player = null;
   let token = 0;
@@ -59,9 +61,9 @@ export function createKeyboardQuiz(root, { id, intro, makeQuestion, onRecorded }
   const keyboard = createKeyboard($('keyboard'), { onPress });
 
   function render() {
-    const labels = { init: 'はじめる', ready: '出題する', answering: '次の問題', result: '次の問題' };
-    el.main.textContent = labels[state];
+    el.main.textContent = state === 'init' ? 'はじめる' : '次の問題';
     el.replay.disabled = question === null;
+    el.end.disabled = state === 'init';
     root.dataset.state = state;
   }
 
@@ -150,8 +152,20 @@ export function createKeyboardQuiz(root, { id, intro, makeQuestion, onRecorded }
     if (question) playNotes(question.notes);
   }
 
+  /** 問題を記録せずに取りやめ、最初の状態に戻す */
+  function reset() {
+    stopPlayback();
+    question = null;
+    state = 'init';
+    keyboard.clearMarks();
+    keyboard.setEnabled(null);
+    showIntro();
+    render();
+  }
+
   el.main.addEventListener('click', onMain);
   el.replay.addEventListener('click', onReplay);
+  el.end.addEventListener('click', reset);
   showIntro();
   render();
 
@@ -160,15 +174,8 @@ export function createKeyboardQuiz(root, { id, intro, makeQuestion, onRecorded }
     activate() {},
     /** 他の画面へ移ったとき。解答中の問題は記録せず取り消す */
     deactivate() {
-      stopPlayback();
-      if (state === 'answering') {
-        question = null;
-        state = 'ready';
-        keyboard.clearMarks();
-        keyboard.setEnabled(null);
-        showIntro();
-        render();
-      }
+      if (state === 'answering') reset();
+      else stopPlayback();
     },
   };
 }

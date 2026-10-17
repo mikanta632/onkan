@@ -29,47 +29,73 @@
 
   <main class="app-main">
     <!-- 練習 -->
-    <section class="view is-active" data-view="practice" aria-label="練習">
+    <section class="view practice is-active" data-view="practice" aria-label="練習">
       <div class="mode-switch" role="tablist" aria-label="練習の種類">
-        <button type="button" role="tab" data-mode="mimic">発声</button>
+        <button type="button" role="tab" data-mode="voice">発声</button>
         <button type="button" role="tab" data-mode="relative">相対音感</button>
         <button type="button" role="tab" data-mode="absolute">絶対音感</button>
       </div>
 
-      <!-- 発声練習 -->
-      <div class="mode" id="mode-mimic" data-state="init" hidden>
-        <p class="target">お手本 <strong data-el="target">—</strong></p>
-        <p class="rule" data-el="rule"></p>
-
-        <div class="pitch">
-          <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
-            <circle class="ring-track" cx="100" cy="100" r="90"></circle>
-            <circle class="ring-fill" data-el="ring" cx="100" cy="100" r="90"></circle>
-          </svg>
-          <div class="pitch-text">
-            <div class="note" data-el="note">—</div>
-            <div class="cents" data-el="cents">&nbsp;</div>
-          </div>
-          <div class="badge" data-el="badge" aria-live="polite"></div>
+      <!-- 発声練習（1音・音程・フレーズ） -->
+      <div class="mode" id="mode-voice" hidden>
+        <div class="sub-switch" role="tablist" aria-label="発声練習の種類">
+          <button type="button" role="tab" data-voice="single">1音</button>
+          <button type="button" role="tab" data-voice="interval">音程</button>
+          <button type="button" role="tab" data-voice="phrase">フレーズ</button>
         </div>
 
-        <div class="meter" aria-hidden="true">
-          <div class="meter-track">
-            <div class="meter-zone" data-el="zone"></div>
-            <div class="meter-center"></div>
-            <div class="meter-needle" data-el="needle" hidden></div>
+        <!-- 1音・音程 -->
+        <div class="voice-pane" id="voice-mimic" data-state="init">
+          <p class="target" data-el="target">お手本 <strong>—</strong></p>
+          <p class="rule" data-el="rule"></p>
+
+          <div class="pitch">
+            <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+              <circle class="ring-track" cx="100" cy="100" r="90"></circle>
+              <circle class="ring-fill" data-el="ring" cx="100" cy="100" r="90"></circle>
+            </svg>
+            <div class="pitch-text">
+              <div class="note" data-el="note">—</div>
+              <div class="cents" data-el="cents">&nbsp;</div>
+            </div>
+            <div class="badge" data-el="badge" aria-live="polite"></div>
           </div>
-          <div class="meter-labels"><span>▼ 低い</span><span>高い ▲</span></div>
+
+          <div class="meter" aria-hidden="true">
+            <div class="meter-track">
+              <div class="meter-zone" data-el="zone"></div>
+              <div class="meter-center"></div>
+              <div class="meter-needle" data-el="needle" hidden></div>
+            </div>
+            <div class="meter-labels"><span>▼ 低い</span><span class="direction" data-el="direction"></span><span>高い ▲</span></div>
+          </div>
+
+          <canvas class="trace" data-el="trace" aria-label="記録した音程の変化"></canvas>
+          <div class="timebar" aria-hidden="true"><div class="timebar-fill" data-el="time"></div></div>
+          <p class="status" data-el="status" role="status" aria-live="polite"></p>
+
+          <div class="actions">
+            <button type="button" class="btn btn-end" data-action="end" disabled>終了</button>
+            <button type="button" class="btn btn-secondary" data-action="replay" disabled>もう一度</button>
+            <button type="button" class="btn btn-primary" data-action="main">はじめる</button>
+          </div>
         </div>
 
-        <p class="direction" data-el="direction">&nbsp;</p>
-        <canvas class="trace" data-el="trace" aria-label="記録した音程の変化"></canvas>
-        <div class="timebar" aria-hidden="true"><div class="timebar-fill" data-el="time"></div></div>
-        <p class="status" data-el="status" role="status" aria-live="polite">「はじめる」をタップすると、マイクの使用許可を求めます。</p>
+        <!-- フレーズ -->
+        <div class="voice-pane" id="voice-phrase" data-state="init" hidden>
+          <p class="target" data-el="target"></p>
+          <p class="rule" data-el="rule"></p>
+          <div class="live"><span class="live-note" data-el="note">—</span><span class="cents" data-el="cents"></span></div>
+          <canvas class="roll" data-el="roll" aria-label="お手本のフレーズと自分の声"></canvas>
+          <div class="note-results" data-el="results"></div>
+          <div class="timebar" aria-hidden="true"><div class="timebar-fill" data-el="time"></div></div>
+          <p class="status" data-el="status" role="status" aria-live="polite"></p>
 
-        <div class="actions">
-          <button type="button" class="btn btn-secondary" data-action="replay" disabled>もう一度聞く</button>
-          <button type="button" class="btn btn-primary" data-action="main">はじめる</button>
+          <div class="actions">
+            <button type="button" class="btn btn-end" data-action="end" disabled>終了</button>
+            <button type="button" class="btn btn-secondary" data-action="replay" disabled>もう一度</button>
+            <button type="button" class="btn btn-primary" data-action="main">はじめる</button>
+          </div>
         </div>
       </div>
 
@@ -110,7 +136,7 @@
             <input type="range" name="toleranceCents" min="10" max="50" step="5">
           </label>
           <label class="field">
-            <span class="field-head">記録する時間 <output data-for="recordMs"></output></span>
+            <span class="field-head">記録する時間（1音・音程） <output data-for="recordMs"></output></span>
             <input type="range" name="recordMs" min="1000" max="5000" step="500">
           </label>
           <label class="field">
@@ -125,7 +151,32 @@
             <input type="checkbox" name="allowOctave">
             <span>オクターブ違いも正解にする<small>例：お手本が E4 のとき、E3 や E5 で歌っても正解</small></span>
           </label>
+          <p class="settings-note">「音程」では、相対音感の「出題する音程」と「2つ目の音の向き」を使います。</p>
         </div>
+
+        <fieldset class="card">
+          <legend>フレーズ</legend>
+          <label class="field">
+            <span class="field-head">音の数 <output data-for="phraseLength"></output></span>
+            <input type="range" name="phraseLength" min="2" max="4" step="1">
+          </label>
+          <div class="field">
+            <span class="field-head">音の跳び方</span>
+            <div class="segmented">
+              <label><input type="radio" name="phraseStep" value="step"><span>隣の音まで</span></label>
+              <label><input type="radio" name="phraseStep" value="third"><span>3度まで</span></label>
+              <label><input type="radio" name="phraseStep" value="fifth"><span>5度まで</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-head">テンポ（1音の長さ）</span>
+            <div class="segmented">
+              <label><input type="radio" name="phraseNoteMs" value="1200"><span>ゆっくり</span></label>
+              <label><input type="radio" name="phraseNoteMs" value="900"><span>ふつう</span></label>
+              <label><input type="radio" name="phraseNoteMs" value="600"><span>はやい</span></label>
+            </div>
+          </div>
+        </fieldset>
 
         <h3 class="settings-head">相対音感</h3>
         <fieldset class="card">

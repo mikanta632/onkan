@@ -1,6 +1,6 @@
 // 入口：タブとモードの切り替え、設定フォーム、記録一覧、テスト音、アプリの更新
 
-import { createMimicMode, MODE_ID as MIMIC } from './modes/mimic.js';
+import { createVoiceMode, MODE_ID as VOICE } from './modes/voice.js';
 import { createRelativeMode, MODE_ID as RELATIVE } from './modes/relative.js';
 import { createAbsoluteMode, MODE_ID as ABSOLUTE } from './modes/absolute.js';
 import { getSettings, updateSettings, resetSettings, LIMITS } from './settings.js';
@@ -13,11 +13,18 @@ import { APP_VERSION, fetchLatestVersion, isNewer, refreshAndReload } from './up
 // ---------- モード ----------
 // モードを追加したら、ここと index.html の .mode-switch に足す
 
-const MODE_LABELS = { [MIMIC]: '発声', [RELATIVE]: '相対音感', [ABSOLUTE]: '絶対音感' };
+/** 記録の id → 記録画面での表示名（並び順もこの順） */
+const RECORD_LABELS = {
+  mimic: '発声・1音',
+  'mimic-interval': '発声・音程',
+  phrase: '発声・フレーズ',
+  [RELATIVE]: '相対音感',
+  [ABSOLUTE]: '絶対音感',
+};
 
 const hooks = { onRecorded: renderToday };
 const modes = {
-  [MIMIC]: createMimicMode(document.getElementById('mode-mimic'), hooks),
+  [VOICE]: createVoiceMode(document.getElementById('mode-voice'), hooks),
   [RELATIVE]: createRelativeMode(document.getElementById('mode-relative'), hooks),
   [ABSOLUTE]: createAbsoluteMode(document.getElementById('mode-absolute'), hooks),
 };
@@ -96,14 +103,14 @@ function renderRecords() {
     list.innerHTML = '<p class="empty">まだ記録がありません。練習すると日ごとに記録されます。</p>';
     return;
   }
-  const order = Object.keys(MODE_LABELS);
+  const order = Object.keys(RECORD_LABELS);
   const rows = days.flatMap(({ date, modes: byMode }) =>
     Object.entries(byMode)
       .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
       .map(([mode, r], i) => `
       <tr>
         <th scope="row">${i === 0 ? formatDate(date) : ''}</th>
-        <td>${MODE_LABELS[mode] ?? mode}</td>
+        <td>${RECORD_LABELS[mode] ?? mode}</td>
         <td class="num">${r.correct}/${r.attempts}</td>
         <td class="rate">
           <span class="rate-bar"><span style="width:${pct(r)}%"></span></span>
@@ -144,8 +151,10 @@ const FORMATS = {
   recordMs: (v) => `${(v / 1000).toFixed(1)} 秒`,
   passRatio: (v) => `${v}% 以上`,
   timeLimitSec: (v) => `${v} 秒`,
+  phraseLength: (v) => `${v} 音`,
 };
 const VALUE_FIELDS = ['rangeLow', 'rangeHigh', 'toleranceCents', 'recordMs', 'passRatio', 'timeLimitSec',
+  'phraseLength', 'phraseStep', 'phraseNoteMs',
   'relDirection', 'absNoteSet', 'absRangeLow', 'absRangeHigh'];
 
 function reflectSettings(s) {

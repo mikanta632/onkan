@@ -1,30 +1,62 @@
-// 「発声練習」モード
-// お手本を 1 音鳴らし、声を出し始めてから n 秒間の音程を記録する。
-// そのうちお手本の ±許容幅に入っていた時間の割合が基準以上なら正解。
+// 発声練習の「1音」「音程」
+//   1音：お手本を 1 音鳴らし、同じ高さを歌う
+//   音程：基準音を鳴らし、「長3度上」のように指定された音程の音を歌う
+// どちらも、声を出し始めてから n 秒間を記録し、お手本の ±許容幅に入っていた時間の割合で正誤を決める。
 
-import { ensureAudio, isAudioSupported, preparePlayback, reopenMic, releaseMic } from '../audio-engine.js';
-import { TonePlayer } from '../tone-player.js';
-import { createPitchTracker } from '../pitch-tracker.js';
-import { createRatioJudge } from '../judge.js';
+import { isAudioSupported } from '../audio-engine.js';
+import * as voice from '../voice-session.js';
+import { createRatioJudge, onsetStats, formatCents } from '../judge.js';
 import { createTrace } from '../trace.js';
-import { midiToFreq, midiToName, centsBetween, foldOctave } from '../note-utils.js';
+import { midiToFreq, midiToName, noteLabel, centsBetween, foldOctave, INTERVAL_NAMES } from '../note-utils.js';
 import { getSettings } from '../settings.js';
 import { recordAttempt } from '../storage.js';
 
-export const MODE_ID = 'mimic';
-const METER_RANGE = 50;       // メーターの端 = ±50 セント
-const PLAYBACK_TAIL_MS = 100; // お手本の残響を拾わないよう、再生後に少し待ってからマイクを戻す
+/** 記録に使う id（「1音」は以前からの記録を引き継ぐため mimic のまま） */
+export const RECORD_IDS = { single: 'mimic', interval: 'mimic-interval' };
+
+const METER_RANGE = 50; // メーターの端 = ±50 セント
 const RING_LENGTH = 2 * Math.PI * 90;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-function pickTarget(low, high, prev) {
+function randomIn(low, high, avoid) {
   if (high <= low) return low;
   let m;
   do {
     m = low + Math.floor(Math.random() * (high - low + 1));
-  } while (m === prev);
+  } while (m === avoid);
   return m;
+}
+
+/**
+ * @returns {{ target: number, reference: number[], reveal: number[], title: string }}
+ *   target: 歌う音 / reference: 出題時に鳴らす音 / reveal: 判定後に「もう一度」で鳴らす音
+ */
+function makeQuestion(type, s, previous) {
+  if (type === 'single') {
+    const t = randomIn(s.rangeLow, s.rangeHigh, previous?.target);
+    return { target: t, reference: [t], reveal: [t], title: `お手本 <strong>${midiToName(t)}</strong>` };
+  }
+  // 音程：オクターブ違いを正解にしていると「オクターブ」は基準音と同じ高さで済んでしまうので外す
+  let intervals = s.relIntervals;
+  if (s.allowOctave && intervals.some((n) => n !== 12)) intervals = intervals.filter((n) => n !== 12);
+  let q;
+  for (let i = 0; i < 20; i++) {
+    const interval = pick(intervals);
+    const dir = s.relDirection === 'both' ? pick([1, -1]) : s.relDirection === 'down' ? -1 : 1;
+    const base = randomIn(s.rangeLow, s.rangeHigh);
+    const target = base + dir * interval;
+    q = {
+      target,
+      reference: [base],
+      reveal: [base, target],
+      title: `<strong>${noteLabel(base)}</strong> から <strong>${INTERVAL_NAMES[interval]}${dir > 0 ? '上' : '下'}</strong>`,
+    };
+    // オクターブ違いを認めないときは、歌う音が出題範囲から離れすぎないものを選ぶ
+    const singable = s.allowOctave || (target >= s.rangeLow - 5 && target <= s.rangeHigh + 5);
+    if (singable && target !== previous?.target) break;
+  }
+  return q;
 }
 
 /**
@@ -47,20 +79,19 @@ export function createMimicMode(root, { onRecorded } = {}) {
     status: $('status'),
     main: root.querySelector('[data-action="main"]'),
     replay: root.querySelector('[data-action="replay"]'),
+    end: root.querySelector('[data-action="end"]'),
   };
   const trace = createTrace($('trace'));
 
-  // init: マイク未準備 / ready: 出題待ち / waiting: 声を待っている / recording: 記録中 / result: 判定済み
+  let type = 'single';
+  // init: 未開始 / waiting: 声を待っている / recording: 記録中 / result: 判定済み
   let state = 'init';
-  let active = true;
-  let playing = false;
-  let token = 0;
-  let player = null;
-  let tracker = null;
-  let target = null;
+  let active = false;
+  let question = null;
   let judge = null;
+  let samples = [];      // 記録中のずれ { t, c }
   let matchedMidis = []; // 合っていたときの声の高さ（オクターブ違いの表示用）
-  let deadline = 0;
+  let deadline = Infinity;
   let settings = getSettings();
 
   el.ring.style.strokeDasharray = String(RING_LENGTH);
@@ -74,10 +105,16 @@ export function createMimicMode(root, { onRecorded } = {}) {
   }
 
   function render() {
-    const labels = { init: 'はじめる', ready: '出題する', waiting: '次の問題', recording: '次の問題', result: '次の問題' };
-    el.main.textContent = labels[state];
-    el.replay.disabled = target === null;
+    el.main.textContent = state === 'init' ? 'はじめる' : '次の問題';
+    el.replay.disabled = question === null;
+    el.end.disabled = state === 'init';
     root.dataset.state = state;
+  }
+
+  function introText() {
+    return type === 'single'
+      ? 'お手本と同じ高さで「アー」と歌います。「はじめる」でマイクの使用許可を求めます。'
+      : '基準音を聞いて、指定された音程の音を歌います。「はじめる」でマイクの使用許可を求めます。';
   }
 
   /** 判定条件の表示と、メーターの許容幅 */
@@ -107,24 +144,22 @@ export function createMimicMode(root, { onRecorded } = {}) {
     el.note.textContent = pitch ? midiToName(pitch.midi) : '—';
     if (cents === null) {
       el.cents.innerHTML = '&nbsp;';
-      el.direction.innerHTML = '&nbsp;';
+      el.direction.textContent = '';
       el.needle.hidden = true;
       root.classList.remove('is-in', 'is-high', 'is-low');
       return;
     }
-    const sign = cents > 0 ? '+' : cents < 0 ? '−' : '±';
     const abs = Math.abs(cents);
     el.cents.textContent = abs <= METER_RANGE
-      ? `${sign}${Math.round(abs)} セント`
-      : `${sign}${Math.round(abs / 100)} 半音`;
+      ? `${formatCents(cents)} セント`
+      : `${formatCents(cents / 100)} 半音`;
 
     const inRange = abs <= settings.toleranceCents;
     root.classList.toggle('is-in', inRange);
     root.classList.toggle('is-high', !inRange && cents > 0);
     root.classList.toggle('is-low', !inRange && cents < 0);
     const little = abs <= 100 ? '少し' : '';
-    el.direction.textContent = inRange ? 'ぴったり！'
-      : cents > 0 ? `高い ▲ ${little}下げて` : `低い ▼ ${little}上げて`;
+    el.direction.textContent = inRange ? 'ぴったり！' : cents > 0 ? `${little}下げて` : `${little}上げて`;
 
     const clamped = Math.max(-METER_RANGE, Math.min(METER_RANGE, cents));
     el.needle.hidden = false;
@@ -140,17 +175,6 @@ export function createMimicMode(root, { onRecorded } = {}) {
     el.badge.textContent = '';
   }
 
-  // ---------- 音声 ----------
-
-  async function setupAudio() {
-    const { ctx, input } = await ensureAudio();
-    if (!player) player = new TonePlayer(ctx);
-    if (!tracker) {
-      tracker = createPitchTracker(ctx, input, { onPitch });
-      tracker.start();
-    }
-  }
-
   function showAudioError(err) {
     const name = err && err.name;
     if (name === 'NotAllowedError' || name === 'SecurityError') {
@@ -162,17 +186,16 @@ export function createMimicMode(root, { onRecorded } = {}) {
     }
   }
 
+  // ---------- 判定 ----------
+
   function centsFor(freq) {
-    const c = centsBetween(freq, midiToFreq(target));
+    const c = centsBetween(freq, midiToFreq(question.target));
     return settings.allowOctave ? foldOctave(c) : c;
   }
 
   function onPitch(pitch, now) {
-    if (playing || !active) {
-      renderPitch(null, null);
-      return;
-    }
-    const cents = pitch && target !== null ? centsFor(pitch.freq) : null;
+    if (!active || !question) return;
+    const cents = pitch ? centsFor(pitch.freq) : null;
     renderPitch(pitch, cents);
     if (!isAsking()) return;
 
@@ -190,6 +213,7 @@ export function createMimicMode(root, { onRecorded } = {}) {
       render();
     }
     if (!r.done) {
+      samples.push({ t: r.elapsed, c: cents });
       trace.push(r.elapsed, cents);
       if (r.inRange) matchedMidis.push(pitch.midi);
     }
@@ -198,7 +222,48 @@ export function createMimicMode(root, { onRecorded } = {}) {
     if (r.done) finish(r.passed, 'ratio', r.ratio);
   }
 
-  // ---------- 出題と判定 ----------
+  /** 合っていたときの声が、お手本と何オクターブ違ったか（最も多かったもの） */
+  function octaveNote() {
+    if (!matchedMidis.length) return '';
+    const counts = new Map();
+    for (const m of matchedMidis) {
+      const o = Math.round((m - question.target) / 12);
+      counts.set(o, (counts.get(o) || 0) + 1);
+    }
+    const octaves = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    if (octaves === 0) return '';
+    return `${Math.abs(octaves)}オクターブ${octaves < 0 ? '下' : '上'}の ${midiToName(question.target + 12 * octaves)} で歌っていました。`;
+  }
+
+  /** @param {'ratio'|'timeout'|'pass'} reason */
+  function finish(correct, reason, ratio = 0) {
+    if (!isAsking()) return;
+    state = 'result';
+    voice.stopListening(); // 判定が出たらマイクは手放す
+    recordAttempt(RECORD_IDS[type], correct);
+    root.classList.add(correct ? 'is-correct' : 'is-wrong');
+    el.badge.textContent = correct ? '正解！' : '残念';
+    renderTime(0);
+    const answer = type === 'single' ? midiToName(question.target) : noteLabel(question.target);
+    if (reason === 'ratio') {
+      const { onset, settled } = onsetStats(samples, settings.recordMs);
+      const lines = [
+        `合っていた割合 ${Math.round(ratio * 100)}%（${settings.passRatio}%以上で正解）`,
+        `出だし ${formatCents(onset)} → 後半 ${formatCents(settled)} セント。`,
+      ];
+      if (correct) lines.push(octaveNote());
+      else if (type === 'interval') lines.push(`正解は ${answer} です。`);
+      setStatus(lines.join('\n').trim());
+    } else if (reason === 'timeout') {
+      setStatus(`声が聞き取れないまま時間切れです。正解は ${answer} でした。`);
+    } else {
+      setStatus(`パスしました。正解は ${answer} でした。`);
+    }
+    render();
+    onRecorded?.();
+  }
+
+  // ---------- 出題 ----------
 
   function newAttempt() {
     judge = createRatioJudge({
@@ -206,113 +271,51 @@ export function createMimicMode(root, { onRecorded } = {}) {
       durationMs: settings.recordMs,
       passRatio: settings.passRatio,
     });
+    samples = [];
     matchedMidis = [];
+    deadline = Infinity;
     trace.reset(settings.recordMs, settings.toleranceCents);
     renderProgress(0);
+    renderTime(0);
   }
 
-  /**
-   * お手本を鳴らし、終わったらマイクを戻して声を待つ。
-   * preparePlayback() がタップ中に resume を呼べるよう、タップのハンドラから await を挟まずに呼ぶ。
-   */
-  async function playReference() {
-    const my = ++token;
-    playing = true;
-    tracker.setEnabled(false);
-    if (isAsking()) {
-      // 記録の途中で聞き直したら、記録はやり直し
-      state = 'waiting';
-      newAttempt();
-      render();
-      setStatus('お手本を再生中…');
-    }
-    // マイクを手放して再生専用にしてから鳴らす（iOS で音が小さくなるのを防ぐ）
-    await preparePlayback();
-    if (my !== token) return; // 途中で別の再生や中断があった
-    await player.play(midiToFreq(target));
-    await sleep(PLAYBACK_TAIL_MS);
-    if (my !== token) return;
-    if (!active) {
-      playing = false; // マイクは練習画面に戻ったときに戻す
-      return;
-    }
+  /** お手本を鳴らし、鳴らし終えたらマイクを開いて声を待つ（タップのハンドラから await を挟まずに呼ぶ） */
+  async function listen() {
+    setStatus(type === 'single' ? 'お手本を再生中…' : '基準音を再生中…');
+    let ok;
     try {
-      await reopenMic();
+      ok = await voice.playThenListen(question.reference);
     } catch (err) {
-      playing = false;
       showAudioError(err);
       return;
     }
-    if (my !== token) {
-      // マイクを取り直している間に次の再生が始まった
-      releaseMic();
-      return;
-    }
-    playing = false;
-    tracker.setEnabled(true);
-    if (state === 'waiting') {
-      deadline = performance.now() + settings.timeLimitSec * 1000;
-      renderTime(1);
-      setStatus(`声を出すと記録が始まります（${settings.recordMs / 1000}秒間）。`);
-    }
+    if (!ok || state !== 'waiting') return;
+    deadline = performance.now() + settings.timeLimitSec * 1000;
+    renderTime(1);
+    setStatus(`声を出すと記録が始まります（${settings.recordMs / 1000}秒間）。`);
   }
 
   function nextQuestion() {
     settings = getSettings();
-    target = pickTarget(settings.rangeLow, settings.rangeHigh, target);
+    question = makeQuestion(type, settings, question);
     clearDisplay();
     renderRule();
     newAttempt();
-    el.target.textContent = midiToName(target);
+    el.target.innerHTML = question.title;
     state = 'waiting';
     render();
-    playReference();
+    listen();
   }
 
-  /** 合っていたときの声が、お手本と何オクターブ違ったか（最も多かったもの） */
-  function octaveNote() {
-    if (!matchedMidis.length) return '';
-    const counts = new Map();
-    for (const m of matchedMidis) {
-      const o = Math.round((m - target) / 12);
-      counts.set(o, (counts.get(o) || 0) + 1);
-    }
-    const octaves = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    if (octaves === 0) return '';
-    return `。${Math.abs(octaves)}オクターブ${octaves < 0 ? '下' : '上'}の ${midiToName(target + 12 * octaves)} で歌っていました`;
-  }
-
-  /** @param {'ratio'|'timeout'|'pass'} reason */
-  function finish(correct, reason, ratio = 0) {
-    if (!isAsking()) return;
-    state = 'result';
-    recordAttempt(MODE_ID, correct);
-    root.classList.add(correct ? 'is-correct' : 'is-wrong');
-    el.badge.textContent = correct ? '正解！' : '残念';
-    renderTime(0);
-    const name = midiToName(target);
-    if (reason === 'ratio') {
-      const summary = `合っていた割合 ${Math.round(ratio * 100)}%（${settings.passRatio}%以上で正解）`;
-      setStatus(correct ? `${summary}${octaveNote()}。` : `${summary}。お手本は ${name} でした。`);
-    } else if (reason === 'timeout') {
-      setStatus(`声が聞き取れないまま時間切れです。お手本は ${name} でした。`);
-    } else {
-      setStatus(`パスしました。お手本は ${name} でした。`);
-    }
-    render();
-    onRecorded?.();
-  }
-
-  function abortQuestion() {
-    token++;
-    player?.stop();
-    playing = false;
-    target = null;
-    state = 'ready';
-    el.target.textContent = '—';
+  /** 問題を記録せずに取りやめ、最初の状態に戻す */
+  function reset(message) {
+    voice.stopAll();
+    question = null;
+    state = 'init';
+    el.target.innerHTML = type === 'single' ? 'お手本 <strong>—</strong>' : '基準音から指定の音程を歌う';
     clearDisplay();
     trace.reset(settings.recordMs, settings.toleranceCents);
-    setStatus('「出題する」をタップすると次の問題を出します。');
+    setStatus(message);
     render();
   }
 
@@ -322,53 +325,70 @@ export function createMimicMode(root, { onRecorded } = {}) {
     if (state === 'init') {
       // 最初のタップで AudioContext の開始とマイクの許可要求を行う（iOS の制約）
       try {
-        await setupAudio();
+        await voice.startVoice();
       } catch (err) {
         showAudioError(err);
         return;
       }
     } else if (isAsking()) {
-      // 解答中に「次の問題」を押したら不正解として記録してから次へ
-      finish(false, 'pass');
+      finish(false, 'pass'); // 解答中に「次の問題」を押したら不正解として記録してから次へ
     }
     nextQuestion();
   }
 
   function onReplay() {
-    if (target !== null && player) playReference();
+    if (!question) return;
+    if (state === 'result') {
+      // 判定後は答え合わせ用に鳴らす（音程なら基準音と正解の音）
+      voice.playThenListen(question.reveal, { listen: false }).catch(() => {});
+      return;
+    }
+    // 解答中に聞き直したら、記録はやり直し
+    state = 'waiting';
+    clearDisplay();
+    newAttempt();
+    render();
+    listen();
+  }
+
+  function onEnd() {
+    reset('終了しました。マイクは止まっています。「はじめる」で再開します。');
   }
 
   el.main.addEventListener('click', onMain);
   el.replay.addEventListener('click', onReplay);
+  el.end.addEventListener('click', onEnd);
 
   if (!isAudioSupported()) {
     el.main.disabled = true;
     setStatus(window.isSecureContext
       ? 'このブラウザはマイク入力に対応していません。'
       : 'マイクを使うには https:// のページで開いてください。');
+  } else {
+    setStatus(introText());
   }
   renderRule();
   render();
 
   return {
-    id: MODE_ID,
-    /** このモードが表示されたとき */
+    /** 「1音」と「音程」を切り替える */
+    setType(t) {
+      if (t === type) return;
+      type = t;
+      reset(introText());
+    },
     activate() {
       active = true;
+      voice.setPitchListener(onPitch);
       settings = getSettings();
       renderRule();
       trace.redraw();
-      // 判定後の画面に戻ったら、声の表示を続けられるようマイクを戻す
-      if (state === 'result' && tracker && !playing) {
-        reopenMic().then(() => tracker.setEnabled(active)).catch(() => {});
-      }
     },
-    /** 他の画面へ移ったとき・アプリが裏に回ったとき。解答中の問題は記録せず取り消し、マイクも手放す */
+    /** 他の画面へ移ったとき・アプリが裏に回ったとき。解答中の問題は記録せず取り消し、マイクも止める */
     deactivate() {
       active = false;
-      if (isAsking()) abortQuestion();
-      tracker?.setEnabled(false);
-      releaseMic();
+      if (isAsking()) reset('中断しました。「はじめる」で再開します。');
+      else voice.stopAll();
     },
   };
 }

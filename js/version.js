@@ -1,2 +1,2 @@
 // アプリのバージョン。変更を公開するたびに上げること（更新ボタンはこの値を比べて新版を見つける）
-export const APP_VERSION = '1.4.0';
+export const APP_VERSION = '1.5.0';
