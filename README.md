@@ -1,0 +1,72 @@
+# 音感トレーニング
+
+お手本の音を聞き、声でまねた音程が合っているかを判定する Web アプリです。
+iPhone の Safari での利用を想定しています。HTML / CSS / 素の JavaScript だけで動き、ビルドは不要です。
+
+## 使い方
+
+1. 「はじめる」をタップします（初回だけマイクの許可を求められます）。
+2. お手本の音が鳴ったら、同じ高さで「アー」と声を出します。
+3. お手本との差が ±30 セント以内のまま 0.5 秒保てたら正解です。10 秒たっても保てなければ不正解になります。
+4. 「次の問題」を押すと次の問題に進みます。解答中に押した場合は不正解として記録されます。
+
+出題範囲、許容幅、保持時間、制限時間、オクターブ違いを正解にするかどうかは「設定」タブで変えられます。
+日ごとの挑戦数と正解率は「記録」タブで見られます。記録はその端末のブラウザ（localStorage）にだけ保存されます。
+
+## GitHub Pages で公開する
+
+1. GitHub で新しいリポジトリを作ります（例：`onkan`）。
+2. このフォルダの中身をプッシュします。
+
+   ```bash
+   git add .
+   git commit -m "最初の版"
+   git branch -M main
+   git remote add origin https://github.com/<ユーザー名>/onkan.git
+   git push -u origin main
+   ```
+
+3. リポジトリの **Settings → Pages** を開き、**Source** を「Deploy from a branch」、**Branch** を `main` と `/ (root)` にして保存します。
+4. 1〜2 分待つと `https://<ユーザー名>.github.io/onkan/` で公開されます。iPhone の Safari でこの URL を開いてください。
+
+マイクを使うには HTTPS が必要です。GitHub Pages は HTTPS で配信されるので、追加の設定はいりません。
+Safari の共有メニューから「ホーム画面に追加」すると、アプリのように起動できます。
+
+## 手元で動かす
+
+ES Modules を使っているため、`index.html` をダブルクリックして開く（`file://`）と動きません。簡単なサーバーを立ててください。
+
+```bash
+python -m http.server 8000
+```
+
+PC のブラウザで `http://localhost:8000` を開きます（`localhost` ならマイクが使えます）。
+
+## ファイル構成
+
+| ファイル | 役割 |
+| --- | --- |
+| `index.html` | 画面（練習・記録・設定の 3 タブ） |
+| `css/style.css` | スマホ縦画面向けのスタイル |
+| `js/main.js` | タブ切り替え、設定フォーム、記録一覧、モードの登録 |
+| `js/audio-engine.js` | AudioContext とマイクの管理（タップを起点に開始） |
+| `js/tone-player.js` | お手本の再生（オシレーター） |
+| `js/pitch-detector.js` | 音高推定（YIN 法）。DOM・Web Audio に依存しない純粋な関数 |
+| `js/pitch-tracker.js` | マイク入力の読み取り、推定、中央値による平滑化 |
+| `js/note-utils.js` | 周波数・MIDI 番号・音名・セントの変換 |
+| `js/judge.js` | 「許容幅の中を一定時間保てたか」の判定 |
+| `js/settings.js` / `js/storage.js` | 設定と日ごとの記録の保存（localStorage） |
+| `js/modes/mimic.js` | 「声でまねる」モード |
+
+### モードを追加するには
+
+`js/modes/` に `activate()` と `deactivate()` を持つモードを置き、`main.js` で登録します。
+たとえば上下当てクイズなら、`TonePlayer` で 2 音を順に鳴らし、`recordAttempt('higher-lower', 正解か)` で記録します。
+記録はモード別に保存されるので、既存の記録とは混ざりません。表示名は `main.js` の `MODE_LABELS` に追加してください。
+
+## iPhone での注意
+
+- お手本の再生中とその直後 0.2 秒はマイクの解析を止めます。スピーカーの音を自分の声と取り違えないためです。それでもイヤホンを使うと、より安定して判定されます。
+- 音が出ないときは、消音スイッチと音量を確かめてください。
+- マイクを一度拒否した場合は、「設定 › Safari › マイク」で許可してからページを再読み込みしてください。
+- アプリを裏に回すと、解答中の問題は記録されずに取り消されます。

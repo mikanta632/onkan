@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f4ef" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15171c" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="音感">
+  <meta name="description" content="お手本の音を声でまねて、音程が合っているかを判定する音感トレーニング">
+  <title>音感トレーニング</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>音感トレーニング</h1>
+    <p class="today" id="today-summary">今日 0問</p>
+  </header>
+
+  <main class="app-main">
+    <!-- 練習 -->
+    <section class="view is-active" data-view="practice" aria-label="練習">
+      <div class="mode" id="mode-mimic" data-state="init">
+        <p class="target">お手本 <strong data-el="target">—</strong></p>
+
+        <div class="pitch">
+          <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+            <circle class="ring-track" cx="100" cy="100" r="90"></circle>
+            <circle class="ring-fill" data-el="ring" cx="100" cy="100" r="90"></circle>
+          </svg>
+          <div class="pitch-text">
+            <div class="note" data-el="note">—</div>
+            <div class="cents" data-el="cents">&nbsp;</div>
+          </div>
+          <div class="badge" data-el="badge" aria-live="polite"></div>
+        </div>
+
+        <div class="meter" aria-hidden="true">
+          <div class="meter-track">
+            <div class="meter-zone" data-el="zone"></div>
+            <div class="meter-center"></div>
+            <div class="meter-needle" data-el="needle" hidden></div>
+          </div>
+          <div class="meter-labels"><span>▼ 低い</span><span>高い ▲</span></div>
+        </div>
+
+        <p class="direction" data-el="direction">&nbsp;</p>
+        <div class="timebar" aria-hidden="true"><div class="timebar-fill" data-el="time"></div></div>
+        <p class="status" data-el="status" role="status" aria-live="polite">「はじめる」をタップすると、マイクの使用許可を求めます。</p>
+
+        <div class="actions">
+          <button type="button" class="btn btn-secondary" data-action="replay" disabled>もう一度聞く</button>
+          <button type="button" class="btn btn-primary" data-action="main">はじめる</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 記録 -->
+    <section class="view" data-view="records" aria-label="記録">
+      <h2>日ごとの記録</h2>
+      <div id="records-list" class="records"></div>
+      <button type="button" class="btn btn-danger" id="btn-clear-records">記録をすべて消去</button>
+    </section>
+
+    <!-- 設定 -->
+    <section class="view" data-view="settings" aria-label="設定">
+      <h2>設定</h2>
+      <form class="settings" id="settings-form" onsubmit="return false">
+        <fieldset class="card">
+          <legend>出題範囲</legend>
+          <div class="row-2">
+            <label class="field">
+              <span class="field-head">いちばん低い音</span>
+              <select name="rangeLow"></select>
+            </label>
+            <label class="field">
+              <span class="field-head">いちばん高い音</span>
+              <select name="rangeHigh"></select>
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="card">
+          <label class="field">
+            <span class="field-head">判定の許容幅 <output data-for="toleranceCents"></output></span>
+            <input type="range" name="toleranceCents" min="10" max="50" step="5">
+          </label>
+          <label class="field">
+            <span class="field-head">正解に必要な保持時間 <output data-for="holdMs"></output></span>
+            <input type="range" name="holdMs" min="300" max="1500" step="100">
+          </label>
+          <label class="field">
+            <span class="field-head">1問の制限時間 <output data-for="timeLimitSec"></output></span>
+            <input type="range" name="timeLimitSec" min="5" max="30" step="1">
+          </label>
+          <label class="toggle">
+            <input type="checkbox" name="allowOctave">
+            <span>オクターブ違いも正解にする</span>
+          </label>
+        </div>
+
+        <button type="button" class="btn btn-secondary" id="btn-reset-settings">初期値に戻す</button>
+      </form>
+
+      <div class="card tips">
+        <h3>うまく判定されないとき</h3>
+        <ul>
+          <li>イヤホンを使うと、お手本の音を聞き取りやすくなります。</li>
+          <li>「アー」など母音をのばすと安定して判定されます。</li>
+          <li>音が出ないときは、消音スイッチと音量を確かめてください。</li>
+          <li>マイクを許可しなかった場合は「設定 › Safari › マイク」から変更できます。</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="画面の切り替え">
+    <button type="button" class="tab is-active" data-tab="practice">練習</button>
+    <button type="button" class="tab" data-tab="records">記録</button>
+    <button type="button" class="tab" data-tab="settings">設定</button>
+  </nav>
+</body>
+</html>
