@@ -1,6 +1,7 @@
 // 設定の読み書き（localStorage）
 
-const KEY = 'onkan.settings.v1';
+const KEY = 'onkan.settings.v2';
+const OLD_KEY = 'onkan.settings.v1'; // v1 ではオクターブ違いの初期値がオフだった
 
 export const DEFAULT_SETTINGS = {
   rangeLow: 60,        // 出題範囲の下限（MIDI 番号。60 = C4）
@@ -8,7 +9,7 @@ export const DEFAULT_SETTINGS = {
   toleranceCents: 30,  // 判定の許容幅（±セント）
   holdMs: 500,         // 正解に必要な保持時間
   timeLimitSec: 10,    // 1 問の制限時間
-  allowOctave: false,  // オクターブ違いも正解にする
+  allowOctave: true,   // オクターブ違いも正解にする（低い声・高い声どちらでも練習できるように）
 };
 
 export const LIMITS = {
@@ -47,7 +48,16 @@ function save(s) {
 export function getSettings() {
   if (!cache) {
     let stored = {};
-    try { stored = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { stored = {}; }
+    try {
+      stored = JSON.parse(localStorage.getItem(KEY));
+      if (!stored) {
+        // v1 の設定は引き継ぎ、オクターブ違いだけ新しい初期値（オン）にする
+        const old = JSON.parse(localStorage.getItem(OLD_KEY));
+        stored = old ? { ...old, allowOctave: true } : {};
+      }
+    } catch {
+      stored = {};
+    }
     cache = normalize({ ...DEFAULT_SETTINGS, ...stored });
   }
   return cache;

@@ -4,7 +4,7 @@
 // モードは共通して { id, activate(), deactivate() } を持つ。
 // 上下当てクイズなどを追加するときは、同じ形で modes/ に置き main.js に登録する。
 
-import { ensureAudio, isAudioSupported } from '../audio-engine.js';
+import { ensureAudio, isAudioSupported, preparePlayback, reopenMic, releaseMic } from '../audio-engine.js';
 import { TonePlayer } from '../tone-player.js';
 import { createPitchTracker } from '../pitch-tracker.js';
 import { createHoldJudge } from '../judge.js';
@@ -14,7 +14,7 @@ import { recordAttempt } from '../storage.js';
 
 export const MODE_ID = 'mimic';
 const METER_RANGE = 50;       // メーターの端 = ±50 セント
-const PLAYBACK_TAIL_MS = 200; // お手本の残響を拾わないよう、再生後もしばらくマイクを止める
+const PLAYBACK_TAIL_MS = 100; // お手本の残響を拾わないよう、再生後に少し待ってからマイクを戻す
 const RING_LENGTH = 2 * Math.PI * 90;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -36,6 +36,7 @@ export function createMimicMode(root, { onRecorded } = {}) {
   const $ = (name) => root.querySelector(`[data-el="${name}"]`);
   const el = {
     target: $('target'),
+    rule: $('rule'),
     note: $('note'),
     cents: $('cents'),
     badge: $('badge'),
@@ -58,6 +59,7 @@ export function createMimicMode(root, { onRecorded } = {}) {
   let tracker = null;
   let target = null;
   let judge = null;
+  let lastMatchedMidi = null; // 許容幅に入ったときの声の高さ（オクターブ違いの表示用）
   let deadline = 0;
   let settings = getSettings();
 
@@ -76,7 +78,12 @@ export function createMimicMode(root, { onRecorded } = {}) {
     root.dataset.state = state;
   }
 
+  /** 判定条件の表示と、メーターの許容幅 */
   function renderZone() {
+    const parts = [`±${settings.toleranceCents}セント`, `${settings.holdMs / 1000}秒キープ`];
+    if (settings.allowOctave) parts.push('オクターブ違いOK');
+    el.rule.textContent = parts.join('・');
+
     const tol = Math.min(settings.toleranceCents, METER_RANGE);
     const half = (tol / METER_RANGE) * 50;
     el.zone.style.left = `${50 - half}%`;
@@ -137,7 +144,6 @@ export function createMimicMode(root, { onRecorded } = {}) {
       tracker = createPitchTracker(ctx, input, { onPitch });
       tracker.start();
     }
-    tracker.setEnabled(active && !playing);
   }
 
   function showAudioError(err) {
@@ -166,6 +172,7 @@ export function createMimicMode(root, { onRecorded } = {}) {
     if (state !== 'listening') return;
 
     const r = judge.update(cents, now);
+    if (r.inRange) lastMatchedMidi = pitch.midi;
     renderHold(r.progress);
     const remain = deadline - now;
     renderTime(remain / (settings.timeLimitSec * 1000));
@@ -175,6 +182,10 @@ export function createMimicMode(root, { onRecorded } = {}) {
 
   // ---------- 出題と判定 ----------
 
+  /**
+   * お手本を鳴らし、終わったらマイクを戻して解答を受け付ける。
+   * preparePlayback() がタップ中に resume を呼べるよう、タップのハンドラから await を挟まずに呼ぶ。
+   */
   async function playReference() {
     const my = ++token;
     playing = true;
@@ -183,11 +194,30 @@ export function createMimicMode(root, { onRecorded } = {}) {
       setStatus('お手本を再生中…');
       renderHold(0);
     }
+    // マイクを手放して再生専用にしてから鳴らす（iOS で音が小さくなるのを防ぐ）
+    await preparePlayback();
+    if (my !== token) return; // 途中で別の再生や中断があった
     await player.play(midiToFreq(target));
     await sleep(PLAYBACK_TAIL_MS);
-    if (my !== token) return; // 途中で別の再生や中断があった
+    if (my !== token) return;
+    if (!active) {
+      playing = false; // マイクは練習画面に戻ったときに戻す
+      return;
+    }
+    try {
+      await reopenMic();
+    } catch (err) {
+      playing = false;
+      showAudioError(err);
+      return;
+    }
+    if (my !== token) {
+      // マイクを取り直している間に次の再生が始まった
+      releaseMic();
+      return;
+    }
     playing = false;
-    tracker.setEnabled(active);
+    tracker.setEnabled(true);
     if (state === 'listening') {
       judge.reset();
       deadline = performance.now() + settings.timeLimitSec * 1000;
@@ -200,6 +230,7 @@ export function createMimicMode(root, { onRecorded } = {}) {
     settings = getSettings();
     target = pickTarget(settings.rangeLow, settings.rangeHigh, target);
     judge = createHoldJudge({ toleranceCents: settings.toleranceCents, holdMs: settings.holdMs });
+    lastMatchedMidi = null;
     clearDisplay();
     renderZone();
     el.target.textContent = midiToName(target);
@@ -217,8 +248,11 @@ export function createMimicMode(root, { onRecorded } = {}) {
     renderHold(correct ? 1 : 0);
     renderTime(0);
     const name = midiToName(target);
+    const octaves = lastMatchedMidi === null ? 0 : Math.round((lastMatchedMidi - target) / 12);
+    const octaveNote = octaves === 0 ? ''
+      : `（${Math.abs(octaves)}オクターブ${octaves < 0 ? '下' : '上'}の ${midiToName(target + 12 * octaves)} で正解）`;
     setStatus(correct
-      ? `${name} を ${settings.holdMs / 1000} 秒キープできました。`
+      ? `${name} を ${settings.holdMs / 1000} 秒キープできました${octaveNote}。`
       : `時間切れです。お手本は ${name} でした。「もう一度聞く」で確かめられます。`);
     render();
     onRecorded?.();
@@ -239,30 +273,23 @@ export function createMimicMode(root, { onRecorded } = {}) {
   // ---------- ボタン ----------
 
   async function onMain() {
-    // 重要: ensureAudio はタップの中で最初に呼ぶ（iOS の制約）
-    const wasPending = state === 'listening';
-    try {
-      await setupAudio();
-    } catch (err) {
-      showAudioError(err);
-      return;
-    }
-    // 解答中に「次の問題」を押したら不正解として記録してから次へ
-    if (wasPending && state === 'listening') {
+    if (state === 'init') {
+      // 最初のタップで AudioContext の開始とマイクの許可要求を行う（iOS の制約）
+      try {
+        await setupAudio();
+      } catch (err) {
+        showAudioError(err);
+        return;
+      }
+    } else if (state === 'listening') {
+      // 解答中に「次の問題」を押したら不正解として記録してから次へ
       finish(false);
     }
     nextQuestion();
   }
 
-  async function onReplay() {
-    if (target === null) return;
-    try {
-      await setupAudio();
-    } catch (err) {
-      showAudioError(err);
-      return;
-    }
-    if (target !== null) playReference();
+  function onReplay() {
+    if (target !== null && player) playReference();
   }
 
   el.main.addEventListener('click', onMain);
@@ -284,13 +311,17 @@ export function createMimicMode(root, { onRecorded } = {}) {
       active = true;
       settings = getSettings();
       renderZone();
-      tracker?.setEnabled(!playing);
+      // 判定後の画面に戻ったら、声の表示を続けられるようマイクを戻す
+      if (state === 'result' && tracker && !playing) {
+        reopenMic().then(() => tracker.setEnabled(active)).catch(() => {});
+      }
     },
-    /** 他のタブへ移ったとき・アプリが裏に回ったとき。解答中の問題は記録せず取り消す */
+    /** 他のタブへ移ったとき・アプリが裏に回ったとき。解答中の問題は記録せず取り消し、マイクも手放す */
     deactivate() {
       active = false;
       if (state === 'listening') abortQuestion();
       tracker?.setEnabled(false);
+      releaseMic();
     },
   };
 }

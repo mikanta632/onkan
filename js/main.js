@@ -4,6 +4,8 @@ import { createMimicMode, MODE_ID as MIMIC } from './modes/mimic.js';
 import { getSettings, updateSettings, resetSettings, LIMITS } from './settings.js';
 import { getDailyRecords, getDay, clearRecords } from './storage.js';
 import { midiToName } from './note-utils.js';
+import { preparePlayback, getSessionType } from './audio-engine.js';
+import { TonePlayer } from './tone-player.js';
 
 // モードを追加したらここに名前を足す
 const MODE_LABELS = { [MIMIC]: '声まね' };
@@ -137,6 +139,22 @@ function onFormChange() {
 form.addEventListener('input', onFormChange);
 form.addEventListener('change', onFormChange);
 document.getElementById('btn-reset-settings').addEventListener('click', () => reflectSettings(resetSettings()));
+
+// ---------- テスト音 ----------
+
+let testPlayer = null;
+document.getElementById('btn-test-tone').addEventListener('click', async () => {
+  const info = document.getElementById('sound-info');
+  try {
+    const ctx = await preparePlayback(); // タップの中で最初に呼ぶ
+    testPlayer ??= new TonePlayer(ctx);
+    const session = getSessionType();
+    info.textContent = `状態: ${ctx.state}・${ctx.sampleRate} Hz・音声セッション: ${session ?? '非対応（消音スイッチがオンだと鳴りません）'}`;
+    await testPlayer.play(440);
+  } catch (err) {
+    info.textContent = `再生できませんでした（${err && err.name || err}）`;
+  }
+});
 
 reflectSettings(getSettings());
 renderToday();

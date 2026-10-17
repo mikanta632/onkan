@@ -23,6 +23,7 @@
     <section class="view is-active" data-view="practice" aria-label="練習">
       <div class="mode" id="mode-mimic" data-state="init">
         <p class="target">お手本 <strong data-el="target">—</strong></p>
+        <p class="rule" data-el="rule"></p>
 
         <div class="pitch">
           <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
@@ -96,12 +97,18 @@
           </label>
           <label class="toggle">
             <input type="checkbox" name="allowOctave">
-            <span>オクターブ違いも正解にする</span>
+            <span>オクターブ違いも正解にする<small>例：お手本が E4 のとき、E3 や E5 で歌っても正解</small></span>
           </label>
         </div>
 
         <button type="button" class="btn btn-secondary" id="btn-reset-settings">初期値に戻す</button>
       </form>
+
+      <div class="card sound-test">
+        <h3>音が聞こえるか確かめる</h3>
+        <button type="button" class="btn btn-secondary" id="btn-test-tone">テスト音を鳴らす（A4）</button>
+        <p class="sound-info" id="sound-info"></p>
+      </div>
 
       <div class="card tips">
         <h3>うまく判定されないとき</h3>

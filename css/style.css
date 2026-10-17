@@ -141,6 +141,19 @@ button, select, input { font: inherit; color: inherit; }
 }
 .target strong { color: var(--text); font-size: 1.4rem; margin-left: 6px; }
 
+/* 判定条件（例：±30セント・0.5秒キープ・オクターブ違いOK） */
+.rule {
+  align-self: center;
+  margin: -6px 0 0;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.rule:empty { display: none; }
+
 .pitch {
   position: relative;
   width: min(62vw, 240px);
@@ -356,7 +369,13 @@ input[type="range"] { width: 100%; height: 36px; accent-color: var(--accent); }
   min-height: 48px;
   font-weight: 600;
 }
-.toggle input { width: 26px; height: 26px; accent-color: var(--accent); }
+.toggle input { flex: none; width: 26px; height: 26px; accent-color: var(--accent); }
+.toggle small { display: block; font-weight: 400; font-size: 0.82rem; color: var(--muted); }
+
+.sound-test { margin-top: 20px; }
+.sound-test h3 { margin: 0 0 10px; font-size: 1rem; }
+.sound-info { margin: 8px 0 0; font-size: 0.82rem; color: var(--muted); }
+.sound-info:empty { display: none; }
 
 .tips { margin-top: 20px; font-size: 0.92rem; color: var(--muted); }
 .tips h3 { margin: 0 0 6px; font-size: 1rem; color: var(--text); }
