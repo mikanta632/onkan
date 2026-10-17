@@ -30,6 +30,15 @@ iPhone の Safari での利用を想定しています。HTML / CSS / 素の Jav
 3. リポジトリの **Settings → Pages** を開き、**Source** を「Deploy from a branch」、**Branch** を `main` と `/ (root)` にして保存します。
 4. 1〜2 分待つと `https://<ユーザー名>.github.io/onkan/` で公開されます。iPhone の Safari でこの URL を開いてください。
 
+### 変更を公開するとき
+
+1. `js/version.js` の `APP_VERSION` を上げます（例：`1.2.0` → `1.3.0`）。
+2. ファイルを追加・改名した場合は、`js/updater.js` の `ASSETS` にも書き足します。
+3. コミットして `main` に push します。1〜2 分で Pages に反映されます。
+
+アプリは起動時とアプリに戻ったときに公開中のバージョンを確かめ、新しければ画面上部に「新しいバージョンがあります」と表示します。
+設定画面の「最新版を確認して更新」からも、手動で更新できます。どちらも全ファイルを取り直してから読み込み直すので、ホーム画面から起動している場合でも最新版になります。
+
 マイクを使うには HTTPS が必要です。GitHub Pages は HTTPS で配信されるので、追加の設定はいりません。
 Safari の共有メニューから「ホーム画面に追加」すると、アプリのように起動できます。
 
@@ -57,6 +66,7 @@ PC のブラウザで `http://localhost:8000` を開きます（`localhost` な�
 | `js/note-utils.js` | 周波数・MIDI 番号・音名・セントの変換 |
 | `js/judge.js` | 「許容幅の中を一定時間保てたか」の判定 |
 | `js/settings.js` / `js/storage.js` | 設定と日ごとの記録の保存（localStorage） |
+| `js/version.js` / `js/updater.js` | バージョン番号と、新版の確認・更新 |
 | `js/modes/mimic.js` | 「声でまねる」モード |
 
 ### モードを追加するには

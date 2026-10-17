@@ -377,6 +377,41 @@ input[type="range"] { width: 100%; height: 36px; accent-color: var(--accent); }
 .sound-info { margin: 8px 0 0; font-size: 0.82rem; color: var(--muted); }
 .sound-info:empty { display: none; }
 
+/* ---------- 更新 ---------- */
+
+.app-update { margin-top: 20px; }
+.app-update h3 { margin: 0 0 4px; font-size: 1rem; }
+.update-info { margin: 0 0 10px; font-size: 0.9rem; color: var(--muted); }
+.update-info strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.update-status { margin: 8px 0 0; font-size: 0.88rem; color: var(--muted); }
+.update-status:empty { display: none; }
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 16px 6px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.update-banner[hidden] { display: none; }
+.update-banner button {
+  flex: none;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent-text);
+  color: var(--accent);
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
 .tips { margin-top: 20px; font-size: 0.92rem; color: var(--muted); }
 .tips h3 { margin: 0 0 6px; font-size: 1rem; color: var(--text); }
 .tips ul { margin: 0; padding-left: 1.2em; }

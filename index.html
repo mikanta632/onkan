@@ -18,6 +18,11 @@
     <p class="today" id="today-summary">今日 0問</p>
   </header>
 
+  <div class="update-banner" id="update-banner" hidden>
+    <span id="update-banner-text">新しいバージョンがあります</span>
+    <button type="button" id="btn-update-banner">更新する</button>
+  </div>
+
   <main class="app-main">
     <!-- 練習 -->
     <section class="view is-active" data-view="practice" aria-label="練習">
@@ -108,6 +113,13 @@
         <h3>音が聞こえるか確かめる</h3>
         <button type="button" class="btn btn-secondary" id="btn-test-tone">テスト音を鳴らす（A4）</button>
         <p class="sound-info" id="sound-info"></p>
+      </div>
+
+      <div class="card app-update">
+        <h3>アプリの更新</h3>
+        <p class="update-info">いまのバージョン <strong id="app-version"></strong></p>
+        <button type="button" class="btn btn-secondary" id="btn-update">最新版を確認して更新</button>
+        <p class="update-status" id="update-status" role="status" aria-live="polite"></p>
       </div>
 
       <div class="card tips">

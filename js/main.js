@@ -6,6 +6,7 @@ import { getDailyRecords, getDay, clearRecords } from './storage.js';
 import { midiToName } from './note-utils.js';
 import { preparePlayback, getSessionType } from './audio-engine.js';
 import { TonePlayer } from './tone-player.js';
+import { APP_VERSION, fetchLatestVersion, isNewer, refreshAndReload } from './updater.js';
 
 // モードを追加したらここに名前を足す
 const MODE_LABELS = { [MIMIC]: '声まね' };
@@ -156,5 +157,67 @@ document.getElementById('btn-test-tone').addEventListener('click', async () => {
   }
 });
 
+// ---------- アプリの更新 ----------
+
+const updateBtn = document.getElementById('btn-update');
+const updateStatus = document.getElementById('update-status');
+const banner = document.getElementById('update-banner');
+let forceReload = false; // 最新版だったときは、2 回目のタップで強制的に読み込み直す
+let lastCheck = 0;
+
+document.getElementById('app-version').textContent = `v${APP_VERSION}`;
+
+function startUpdate(version) {
+  activeMode.deactivate();
+  updateStatus.textContent = version ? `v${version} に更新しています…` : '読み込み直しています…';
+  updateBtn.disabled = true;
+  refreshAndReload(version);
+}
+
+updateBtn.addEventListener('click', async () => {
+  if (forceReload) {
+    startUpdate(null);
+    return;
+  }
+  updateBtn.disabled = true;
+  updateStatus.textContent = '確認しています…';
+  try {
+    const latest = await fetchLatestVersion();
+    if (isNewer(latest)) {
+      startUpdate(latest);
+      return;
+    }
+    updateStatus.textContent = '最新版です。表示がおかしいときは、もう一度押すと読み込み直します。';
+    updateBtn.textContent = '読み込み直す';
+    forceReload = true;
+  } catch {
+    updateStatus.textContent = '確認できませんでした。インターネットにつながっているか確かめてください。';
+  }
+  updateBtn.disabled = false;
+});
+
+/** 起動時とアプリに戻ったときに新版を確かめ、あれば上部でお知らせする（10 分に 1 回まで） */
+async function checkForUpdate() {
+  if (Date.now() - lastCheck < 10 * 60 * 1000) return;
+  lastCheck = Date.now();
+  try {
+    const latest = await fetchLatestVersion();
+    if (!isNewer(latest)) return;
+    document.getElementById('update-banner-text').textContent = `新しいバージョン v${latest} があります`;
+    banner.hidden = false;
+    document.getElementById('btn-update-banner').onclick = () => {
+      banner.hidden = true;
+      startUpdate(latest);
+    };
+  } catch {
+    // オフラインなどは無視
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) checkForUpdate();
+});
+
 reflectSettings(getSettings());
 renderToday();
+checkForUpdate();
