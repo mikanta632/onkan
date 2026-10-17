@@ -67,6 +67,8 @@ PC のブラウザで `http://localhost:8000` を開きます（`localhost` な�
 | `js/judge.js` | 「許容幅の中を一定時間保てたか」の判定 |
 | `js/settings.js` / `js/storage.js` | 設定と日ごとの記録の保存（localStorage） |
 | `js/version.js` / `js/updater.js` | バージョン番号と、新版の確認・更新 |
+| `icons/icon.svg` | アイコンの元絵。PNG（`apple-touch-icon.png` 180px、`icon-192.png`、`icon-512.png`）はここから書き出す |
+| `manifest.webmanifest` | ホーム画面に追加したときの名前とアイコン |
 | `js/modes/mimic.js` | 「声でまねる」モード |
 
 ### モードを追加するには

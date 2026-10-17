@@ -8,6 +8,7 @@ import { APP_VERSION } from './version.js';
 const ASSETS = [
   './',
   'index.html',
+  'manifest.webmanifest',
   'css/style.css',
   'js/main.js',
   'js/version.js',
