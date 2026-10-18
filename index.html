@@ -83,8 +83,15 @@
 
         <!-- フレーズ -->
         <div class="voice-pane" id="voice-phrase" data-state="init" hidden>
+          <div class="kind-switch" role="tablist" aria-label="フレーズの出題">
+            <button type="button" role="tab" data-kind="level">レベル</button>
+            <button type="button" role="tab" data-kind="random">ランダム</button>
+            <button type="button" role="tab" data-kind="pattern">型</button>
+            <button type="button" role="tab" data-kind="song">曲</button>
+          </div>
           <p class="target" data-el="target"></p>
           <p class="rule" data-el="rule"></p>
+          <p class="solfa" data-el="solfa" aria-live="polite"></p>
           <div class="live"><span class="live-note" data-el="note">—</span><span class="cents" data-el="cents"></span></div>
           <canvas class="roll" data-el="roll" aria-label="お手本のフレーズと自分の声"></canvas>
           <div class="note-results" data-el="results"></div>
@@ -108,6 +115,8 @@
     <section class="view" data-view="records" aria-label="記録">
       <h2>日ごとの記録</h2>
       <div id="records-list" class="records"></div>
+      <h2 class="records-sub">フレーズの音程別（苦手な順）</h2>
+      <div id="interval-list" class="records"></div>
       <button type="button" class="btn btn-danger" id="btn-clear-records">記録をすべて消去</button>
     </section>
 
@@ -156,24 +165,52 @@
 
         <fieldset class="card">
           <legend>フレーズ</legend>
-          <label class="field">
-            <span class="field-head">音の数 <output data-for="phraseLength"></output></span>
-            <input type="range" name="phraseLength" min="2" max="4" step="1">
-          </label>
           <div class="field">
-            <span class="field-head">音の跳び方</span>
+            <span class="field-head">出題のしかた</span>
             <div class="segmented">
-              <label><input type="radio" name="phraseStep" value="step"><span>隣の音まで</span></label>
-              <label><input type="radio" name="phraseStep" value="third"><span>3度まで</span></label>
-              <label><input type="radio" name="phraseStep" value="fifth"><span>5度まで</span></label>
+              <label><input type="radio" name="phrasePrompt" value="listen"><span>聞いて歌う</span></label>
+              <label><input type="radio" name="phrasePrompt" value="read"><span>階名を見て歌う</span></label>
             </div>
           </div>
+          <label class="toggle">
+            <input type="checkbox" name="phraseCue">
+            <span>主和音を先に鳴らす<small>ドミソ（短調はラドミ）で調を示してから出題します。「階名を見て歌う」では必ず鳴らします</small></span>
+          </label>
+          <label class="field">
+            <span class="field-head">レベル（自動で上下します）</span>
+            <select name="phraseLevel" data-level-select></select>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" name="phraseFocusWeak">
+            <span>苦手な音程を多めに出す<small>レベル・ランダムで、外すことの多い音程が出やすくなります</small></span>
+          </label>
           <div class="field">
-            <span class="field-head">テンポ（1音の長さ）</span>
+            <span class="field-head">テンポ（1拍の長さ）</span>
             <div class="segmented">
               <label><input type="radio" name="phraseNoteMs" value="1200"><span>ゆっくり</span></label>
               <label><input type="radio" name="phraseNoteMs" value="900"><span>ふつう</span></label>
               <label><input type="radio" name="phraseNoteMs" value="600"><span>はやい</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-head">調（ランダム・型・曲）</span>
+            <div class="segmented">
+              <label><input type="radio" name="phraseScale" value="major"><span>長調</span></label>
+              <label><input type="radio" name="phraseScale" value="minor"><span>短調</span></label>
+              <label><input type="radio" name="phraseScale" value="both"><span>両方</span></label>
+            </div>
+          </div>
+          <label class="field">
+            <span class="field-head">音の数（ランダム） <output data-for="phraseLength"></output></span>
+            <input type="range" name="phraseLength" min="2" max="8" step="1">
+          </label>
+          <div class="field">
+            <span class="field-head">音の跳び方（ランダム）</span>
+            <div class="segmented segmented-4">
+              <label><input type="radio" name="phraseStep" value="step"><span>隣の音</span></label>
+              <label><input type="radio" name="phraseStep" value="third"><span>3度</span></label>
+              <label><input type="radio" name="phraseStep" value="fifth"><span>5度</span></label>
+              <label><input type="radio" name="phraseStep" value="octave"><span>8度</span></label>
             </div>
           </div>
         </fieldset>

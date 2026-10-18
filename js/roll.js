@@ -11,7 +11,8 @@ export function createRoll(canvas) {
   const g = canvas.getContext('2d');
   const data = {
     notes: [],      // お手本の音（MIDI 番号）
-    noteMs: 900,    // 1 音の長さ
+    times: [],      // 各音の [始まり, 終わり]（記録開始からの ms）
+    labels: null,   // 帯に添える文字（なければ音名）
     tolerance: 30,  // 許容幅（セント）
     samples: [],    // { t, slot, c } 記録開始からの時間・何音目か・その音からのずれ
     cursor: null,   // 記録中の現在位置 [ms]
@@ -29,12 +30,12 @@ export function createRoll(canvas) {
     }
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, w, h);
-    const { notes, noteMs, tolerance, samples, cursor, results } = data;
+    const { notes, times, labels, tolerance, samples, cursor, results } = data;
     if (!notes.length) return;
 
     const lo = Math.min(...notes) - 2;
     const hi = Math.max(...notes) + 2;
-    const total = notes.length * noteMs;
+    const total = times[times.length - 1][1];
     const padX = 8;
     const padY = 14;
     const rowH = (h - padY * 2) / (hi - lo);
@@ -70,8 +71,8 @@ export function createRoll(canvas) {
     g.font = '600 11px -apple-system, "Hiragino Sans", sans-serif';
     g.textBaseline = 'bottom';
     notes.forEach((m, i) => {
-      const x0 = x(i * noteMs) + 2;
-      const x1 = x((i + 1) * noteMs) - 2;
+      const x0 = x(times[i][0]) + 2;
+      const x1 = Math.max(x0 + 4, x(times[i][1]) - 2);
       const r = results?.[i];
       g.fillStyle = r ? (r.passed ? colors.okSoft : 'rgba(201, 42, 42, 0.18)') : colors.bar;
       g.strokeStyle = r ? (r.passed ? colors.ok : colors.ng) : colors.muted;
@@ -82,7 +83,7 @@ export function createRoll(canvas) {
       g.fill();
       g.stroke();
       g.fillStyle = colors.muted;
-      g.fillText(midiToName(m), x0 + 2, y(m) - barH / 2 - 1);
+      g.fillText(labels?.[i] ?? midiToName(m), x0 + 2, y(m) - barH / 2 - 1);
     });
 
     // 自分の声（お手本の音からのずれで描くので、オクターブ違いもその音の高さに重なる）

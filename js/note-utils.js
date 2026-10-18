@@ -46,3 +46,10 @@ export function centsBetween(freq, refFreq) {
 export function foldOctave(cents) {
   return cents - 1200 * Math.round(cents / 1200);
 }
+
+/** 半音数（正なら上がる）→「長3度上」「同じ音」のような表示 */
+export function intervalLabel(semis) {
+  if (semis === 0) return '同じ音';
+  const name = INTERVAL_NAMES[Math.abs(semis)] ?? `${Math.abs(semis)}半音`;
+  return `${name}${semis > 0 ? '上' : '下'}`;
+}

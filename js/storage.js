@@ -47,5 +47,34 @@ export function getDailyRecords() {
 }
 
 export function clearRecords() {
-  try { localStorage.removeItem(KEY); } catch { /* 何もしない */ }
+  try {
+    localStorage.removeItem(KEY);
+    localStorage.removeItem(INTERVAL_KEY);
+  } catch { /* 何もしない */ }
+}
+
+// ---------- フレーズの音程別の成績 ----------
+// 形式: { "+4": { n: 10, ok: 7 }, "-2": {...} }（キーは前の音からの半音数。正なら上がる）
+
+const INTERVAL_KEY = 'onkan.phraseIntervals.v1';
+
+export function getIntervalStats() {
+  try {
+    const data = JSON.parse(localStorage.getItem(INTERVAL_KEY));
+    return data && typeof data === 'object' ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+/** @param {{ semis: number, ok: boolean }[]} items */
+export function recordIntervals(items) {
+  const data = getIntervalStats();
+  for (const { semis, ok } of items) {
+    if (Math.abs(semis) > 12) continue;
+    const r = (data[String(semis)] ??= { n: 0, ok: 0 });
+    r.n += 1;
+    if (ok) r.ok += 1;
+  }
+  try { localStorage.setItem(INTERVAL_KEY, JSON.stringify(data)); } catch { /* 保存できない環境では記録しない */ }
 }

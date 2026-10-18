@@ -1,5 +1,7 @@
 // 設定の読み書き（localStorage）
 
+import { KINDS, LEVELS, MAX_JUMP } from './phrase-bank.js';
+
 const KEY = 'onkan.settings.v2';
 const OLD_KEY = 'onkan.settings.v1'; // v1 ではオクターブ違いの初期値がオフだった
 
@@ -19,9 +21,15 @@ export const DEFAULT_SETTINGS = {
   passRatio: 70,        // 記録中に合っていた時間の割合がこれ以上なら正解（%）
   timeLimitSec: 10,     // 声を出し始めるまでの制限時間
   allowOctave: true,    // オクターブ違いも正解にする（低い声・高い声どちらでも練習できるように）
-  phraseLength: 3,      // フレーズの音の数
-  phraseStep: 'step',   // 跳び方：step 隣の音まで / third 3度まで / fifth 5度まで
-  phraseNoteMs: 900,    // フレーズの 1 音の長さ
+  phraseKind: 'level',  // 出題：level レベル / random ランダム / pattern 型 / song 曲の一節
+  phraseLevel: 1,       // レベルの段階（1〜LEVELS.length）
+  phrasePrompt: 'listen', // listen お手本を聞いて歌う / read 階名を見て歌う（お手本なし）
+  phraseCue: true,      // 出題の前に主和音を鳴らして調を示す
+  phraseScale: 'major', // 型・曲・ランダムの調：major 長調 / minor 短調 / both 両方
+  phraseLength: 3,      // ランダムの音の数
+  phraseStep: 'step',   // ランダムの跳び方：step 隣の音まで / third 3度まで / fifth 5度まで / octave オクターブまで
+  phraseNoteMs: 900,    // フレーズの 1 拍の長さ
+  phraseFocusWeak: true, // 苦手な音程を多めに出す（レベル・ランダム）
 
   // 相対音感
   relIntervals: [2, 4, 5, 7, 12], // 出題する音程（半音数）
@@ -39,6 +47,7 @@ export const LIMITS = {
   recordMs: [1000, 5000],
   passRatio: [50, 100],
   timeLimitSec: [5, 30],
+  phraseLength: [2, 8],
 };
 
 let cache = null;
@@ -67,9 +76,15 @@ function normalize(s) {
   return {
     mode: oneOf(s.mode === 'mimic' ? 'voice' : s.mode, MODES, d.mode), // v1.4 までは発声練習の id が mimic
     voiceType: oneOf(s.voiceType, VOICE_TYPES, d.voiceType),
-    phraseLength: clamp(s.phraseLength, [2, 4], d.phraseLength),
-    phraseStep: oneOf(s.phraseStep, ['step', 'third', 'fifth'], d.phraseStep),
+    phraseKind: oneOf(s.phraseKind, KINDS, d.phraseKind),
+    phraseLevel: clamp(s.phraseLevel, [1, LEVELS.length], d.phraseLevel),
+    phrasePrompt: oneOf(s.phrasePrompt, ['listen', 'read'], d.phrasePrompt),
+    phraseCue: Boolean(s.phraseCue),
+    phraseScale: oneOf(s.phraseScale, ['major', 'minor', 'both'], d.phraseScale),
+    phraseLength: clamp(s.phraseLength, LIMITS.phraseLength, d.phraseLength),
+    phraseStep: oneOf(s.phraseStep, Object.keys(MAX_JUMP), d.phraseStep),
     phraseNoteMs: oneOf(Number(s.phraseNoteMs), PHRASE_NOTE_MS, d.phraseNoteMs),
+    phraseFocusWeak: Boolean(s.phraseFocusWeak),
     rangeLow,
     rangeHigh,
     toleranceCents: clamp(s.toleranceCents, LIMITS.toleranceCents, d.toleranceCents),
@@ -117,9 +132,10 @@ export function updateSettings(patch) {
   return cache;
 }
 
-/** 練習の設定を初期値に戻す（選んでいるモードはそのまま） */
+/** 練習の設定を初期値に戻す（選んでいるモード・フレーズの出題とレベルはそのまま） */
 export function resetSettings() {
-  cache = { ...DEFAULT_SETTINGS, relIntervals: [...DEFAULT_SETTINGS.relIntervals], mode: getSettings().mode };
+  const { mode, voiceType, phraseKind, phraseLevel } = getSettings();
+  cache = { ...DEFAULT_SETTINGS, relIntervals: [...DEFAULT_SETTINGS.relIntervals], mode, voiceType, phraseKind, phraseLevel };
   save(cache);
   return cache;
 }

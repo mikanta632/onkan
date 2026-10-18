@@ -31,6 +31,7 @@ const ASSETS = [
   'js/voice-session.js',
   'js/modes/voice.js',
   'js/modes/phrase.js',
+  'js/phrase-bank.js',
 ];
 
 export { APP_VERSION };

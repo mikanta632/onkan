@@ -31,18 +31,21 @@ export function setPitchListener(fn) {
 /**
  * 音を順に鳴らし、鳴らし終えたらマイクを開いて声を聞き始める。
  * マイクは再生前に手放す（iOS で音が小さくなるのを防ぐ）。タップのハンドラから await を挟まずに呼ぶこと。
- * @param {number[]} midis
+ * 要素は MIDI 番号か、{ midi: 番号または和音の配列, sec: 長さ, gapMs: 直前の間 }。
+ * @param {(number|{midi: number|number[], sec?: number, gapMs?: number})[]} items
  * @param {{ noteSec?: number, gapMs?: number, listen?: boolean }} opts listen: false なら鳴らすだけ
  * @returns {Promise<boolean>} 最後まで進めたら true。途中で別の再生や停止があれば false
  */
-export async function playThenListen(midis, { noteSec = 1.2, gapMs = 120, listen = true } = {}) {
+export async function playThenListen(items, { noteSec = 1.2, gapMs = 120, listen = true } = {}) {
   const my = ++token;
   stopListening();
   await preparePlayback();
-  for (let i = 0; i < midis.length; i++) {
-    if (i > 0) await sleep(gapMs);
+  for (let i = 0; i < items.length; i++) {
+    const item = typeof items[i] === 'number' ? { midi: items[i] } : items[i];
+    if (i > 0) await sleep(item.gapMs ?? gapMs);
     if (my !== token) return false;
-    await player.play(midiToFreq(midis[i]), { duration: noteSec });
+    const freqs = [].concat(item.midi).map(midiToFreq);
+    await player.play(freqs.length > 1 ? freqs : freqs[0], { duration: item.sec ?? noteSec });
     if (my !== token) return false;
   }
   if (!listen) return true;

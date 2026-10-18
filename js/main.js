@@ -4,8 +4,9 @@ import { createVoiceMode, MODE_ID as VOICE } from './modes/voice.js';
 import { createRelativeMode, MODE_ID as RELATIVE } from './modes/relative.js';
 import { createAbsoluteMode, MODE_ID as ABSOLUTE } from './modes/absolute.js';
 import { getSettings, updateSettings, resetSettings, LIMITS } from './settings.js';
-import { getDailyRecords, getDay, clearRecords } from './storage.js';
-import { midiToName, INTERVAL_NAMES } from './note-utils.js';
+import { getDailyRecords, getDay, clearRecords, getIntervalStats } from './storage.js';
+import { midiToName, INTERVAL_NAMES, intervalLabel } from './note-utils.js';
+import { LEVELS, levelLabel } from './phrase-bank.js';
 import { preparePlayback, getSessionType } from './audio-engine.js';
 import { TonePlayer } from './tone-player.js';
 import { APP_VERSION, fetchLatestVersion, isNewer, refreshAndReload } from './updater.js';
@@ -59,6 +60,7 @@ function showTab(name) {
   if (name === 'practice') activeMode.activate();
   else activeMode.deactivate();
   if (name === 'records') renderRecords();
+  if (name === 'settings') reflectSettings(getSettings()); // レベルは練習中に変わる
   document.querySelector('.app-main').scrollTop = 0;
 }
 
@@ -97,6 +99,7 @@ function formatDate(key) {
 }
 
 function renderRecords() {
+  renderIntervals();
   const list = document.getElementById('records-list');
   const days = getDailyRecords();
   if (!days.length) {
@@ -124,6 +127,31 @@ function renderRecords() {
     </table>`;
 }
 
+/** フレーズの音程（前の音からの動き）ごとの正解率。苦手な順に並べる */
+function renderIntervals() {
+  const list = document.getElementById('interval-list');
+  const rows = Object.entries(getIntervalStats())
+    .map(([semis, r]) => ({ semis: Number(semis), ...r, rate: r.n ? r.ok / r.n : 0 }))
+    .sort((a, b) => a.rate - b.rate || b.n - a.n);
+  if (!rows.length) {
+    list.innerHTML = '<p class="empty">フレーズを歌うと、音程ごとの正解率がここに出ます。</p>';
+    return;
+  }
+  list.innerHTML = `
+    <table>
+      <thead><tr><th>音程</th><th class="num">合格/回数</th><th>正解率</th></tr></thead>
+      <tbody>${rows.map((r) => `
+        <tr>
+          <th scope="row">${intervalLabel(r.semis)}</th>
+          <td class="num">${r.ok}/${r.n}</td>
+          <td class="rate">
+            <span class="rate-bar"><span style="width:${Math.round(r.rate * 100)}%"></span></span>
+            <span class="num">${Math.round(r.rate * 100)}%</span>
+          </td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
 document.getElementById('btn-clear-records').addEventListener('click', () => {
   if (!confirm('すべての記録を消去します。よろしいですか？')) return;
   clearRecords();
@@ -140,6 +168,9 @@ form.querySelectorAll('select[data-note-select]').forEach((select) => {
   for (let m = lo; m <= hi; m++) select.add(new Option(midiToName(m), String(m)));
 });
 
+const levelSelect = form.querySelector('select[data-level-select]');
+LEVELS.forEach((_, i) => levelSelect.add(new Option(`${i + 1}：${levelLabel(i + 1)}`, String(i + 1))));
+
 const chips = document.getElementById('interval-chips');
 for (let n = 1; n <= 12; n++) {
   chips.insertAdjacentHTML('beforeend',
@@ -154,12 +185,14 @@ const FORMATS = {
   phraseLength: (v) => `${v} 音`,
 };
 const VALUE_FIELDS = ['rangeLow', 'rangeHigh', 'toleranceCents', 'recordMs', 'passRatio', 'timeLimitSec',
-  'phraseLength', 'phraseStep', 'phraseNoteMs',
+  'phrasePrompt', 'phraseLevel', 'phraseScale', 'phraseLength', 'phraseStep', 'phraseNoteMs',
   'relDirection', 'absNoteSet', 'absRangeLow', 'absRangeHigh'];
+
+const TOGGLE_FIELDS = ['allowOctave', 'phraseCue', 'phraseFocusWeak'];
 
 function reflectSettings(s) {
   for (const name of VALUE_FIELDS) form.elements[name].value = String(s[name]);
-  form.elements.allowOctave.checked = s.allowOctave;
+  for (const name of TOGGLE_FIELDS) form.elements[name].checked = s[name];
   form.querySelectorAll('input[name="relIntervals"]').forEach((i) => {
     i.checked = s.relIntervals.includes(Number(i.value));
   });
@@ -169,7 +202,8 @@ function reflectSettings(s) {
 }
 
 function onFormChange() {
-  const patch = { allowOctave: form.elements.allowOctave.checked };
+  const patch = {};
+  for (const name of TOGGLE_FIELDS) patch[name] = form.elements[name].checked;
   for (const name of VALUE_FIELDS) patch[name] = form.elements[name].value;
   patch.relIntervals = [...form.querySelectorAll('input[name="relIntervals"]:checked')].map((i) => Number(i.value));
   reflectSettings(updateSettings(patch));

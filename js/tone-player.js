@@ -14,24 +14,30 @@ export class TonePlayer {
   }
 
   /**
-   * 1 音を鳴らす。鳴り終わる（または stop される）と resolve する。
+   * 1 音（周波数の配列なら和音）を鳴らす。鳴り終わる（または stop される）と resolve する。
    * 上下当てクイズなどで続けて鳴らすときは await で順番に呼ぶ。
+   * @param {number|number[]} freq
    */
   play(freq, { duration = 1.2, volume = 0.7 } = {}) {
     this.stop();
     const { ctx } = this;
+    const freqs = [].concat(freq);
+    const level = freqs.length > 1 ? (volume * 1.2) / freqs.length : volume; // 和音は重なって大きくなる分を下げる
     const t0 = ctx.currentTime + 0.02;
-    const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.setPeriodicWave(this.wave);
-    osc.frequency.setValueAtTime(freq, t0);
     // プツッというノイズを避けるため、立ち上がりと減衰を付ける
     gain.gain.setValueAtTime(0, t0);
-    gain.gain.linearRampToValueAtTime(volume, t0 + 0.03);
-    gain.gain.setValueAtTime(volume, t0 + duration - 0.15);
+    gain.gain.linearRampToValueAtTime(level, t0 + 0.03);
+    gain.gain.setValueAtTime(level, Math.max(t0 + 0.03, t0 + duration - 0.15));
     gain.gain.linearRampToValueAtTime(0, t0 + duration);
-    osc.connect(gain);
     gain.connect(ctx.destination);
+    const oscs = freqs.map((f) => {
+      const osc = ctx.createOscillator();
+      osc.setPeriodicWave(this.wave);
+      osc.frequency.setValueAtTime(f, t0);
+      osc.connect(gain);
+      return osc;
+    });
 
     return new Promise((resolve) => {
       let settled = false;
@@ -39,23 +45,27 @@ export class TonePlayer {
         if (settled) return;
         settled = true;
         clearTimeout(fallback);
-        osc.disconnect();
+        oscs.forEach((o) => o.disconnect());
         gain.disconnect();
-        if (this.current === osc) this.current = null;
+        if (this.current === oscs) this.current = null;
         resolve();
       };
       // onended が来ない場合（コンテキストが止まった等）の保険
       const fallback = setTimeout(done, (duration + 0.5) * 1000);
-      osc.onended = done;
-      osc.start(t0);
-      osc.stop(t0 + duration + 0.02);
-      this.current = osc;
+      oscs[0].onended = done;
+      for (const o of oscs) {
+        o.start(t0);
+        o.stop(t0 + duration + 0.02);
+      }
+      this.current = oscs;
     });
   }
 
   stop() {
     if (!this.current) return;
-    try { this.current.stop(); } catch { /* 既に止まっている */ }
+    for (const o of this.current) {
+      try { o.stop(); } catch { /* 既に止まっている */ }
+    }
     this.current = null;
   }
 }
